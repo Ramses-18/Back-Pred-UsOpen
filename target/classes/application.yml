@@ -30,4 +30,4 @@ app:
   deadline-offset-minutes: 30
 
 cors:
-  allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app/}

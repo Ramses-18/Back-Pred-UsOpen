@@ -79,11 +79,14 @@ public void syncTodayResults() {
             // Obtener cancha y ronda si vienen
             String court = "TBD";
             String round = null;
+            // Filtrar solo Wimbledon
             Map<String, Object> tournament = (Map<String, Object>) fixture.get("tournament");
             if (tournament != null) {
-                Object courtObj = tournament.get("name");
-                if (courtObj != null) court = courtObj.toString();
+                String tournamentName = String.valueOf(tournament.get("name"));
+            if (!tournamentName.toLowerCase().contains("wimbledon")) continue;
+                court = tournamentName;
             }
+            
             Map<String, Object> roundObj = (Map<String, Object>) fixture.get("round");
             if (roundObj != null) {
                 Object roundName = roundObj.get("name");

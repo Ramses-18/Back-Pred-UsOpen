@@ -44,7 +44,7 @@ public class AdminController {
     /** Fuerza la sincronización con la API de tenis inmediatamente */
     @PostMapping("/sync")
     public ResponseEntity<Map<String, String>> syncNow() {
-        tennisApiService.syncResults();
+        tennisApiService.syncTodayResults();
         return ResponseEntity.ok(Map.of("status", "Sincronización ejecutada"));
     }
 }

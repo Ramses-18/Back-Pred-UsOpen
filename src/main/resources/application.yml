@@ -17,10 +17,9 @@ spring:
 
   sql:
     init:
-      mode: always
-      schema-locations: classpath:schema.sql
-      continue-on-error: true
+      mode: none
 
+      
 server:
   port: ${PORT:8081}
 

@@ -32,11 +32,9 @@ app:
     secret: ${JWT_SECRET:cambiar-este-secreto-en-produccion-minimo-256-bits-requerido-1234567890}
     expiration-ms: 86400000
     deadline-offset-minutes: 30
-
-tennis-api:
-    key: ${TENNIS_API_KEY:}
+  tennis-api:
+    key: 65a0448ce2mshb4bf03bd4afcd36p171c0cjsn93f1b45dbac1
     host: tennisapi1.p.rapidapi.com
-
 
 cors:
   allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app/}

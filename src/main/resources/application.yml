@@ -29,5 +29,10 @@ app:
     key: ${TENNIS_API_KEY}
     host: tennis-api-atp-wta-itf.p.rapidapi.com
 
+logging:
+  level:
+    org.springframework.security: DEBUG
+    com.wimbledon: DEBUG
+
 cors:
   allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app}

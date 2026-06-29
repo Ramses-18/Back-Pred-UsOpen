@@ -2,8 +2,11 @@ package com.wimbledon.config;
 
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+
+import java.beans.JavaBean;
 import java.util.Map;
 
+@JavaBean
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

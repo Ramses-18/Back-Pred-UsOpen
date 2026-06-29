@@ -31,137 +31,119 @@ public class TennisApiService {
     private final MatchAdminService matchAdminService;
     private final RestTemplate      restTemplate;
 
-    @Scheduled(fixedDelay = 600_000) // cada 10 minutos
+    @Scheduled(fixedDelay = 600_000)
     public void syncTodayResults() {
         String today = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
-        String url   = "https://" + apiHost + "/api/tennis/atp-singles/" + today;
+        // Endpoint: GET /tennis/v2/atp/fixtures/{date}
+        // player1 en datos historicos = GANADOR, player2 = perdedor
+        // result viene como "6-3 6-4" (sets separados por espacio)
+        String url = "https://" + apiHost
+            + "/tennis/v2/atp/fixtures/" + today
+            + "?filter=PlayerGroup:singles&pageSize=100";
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("x-rapidapi-key",  apiKey);
-        headers.set("x-rapidapi-host", apiHost);
-        headers.set("Content-Type", "application/json");
+        headers.set("X-RapidAPI-Key",  apiKey);
+        headers.set("X-RapidAPI-Host", apiHost);
 
-        log.info("Sincronizando resultados ATP para fecha: {}", today);
+        log.info("Sincronizando resultados ATP - {}", today);
 
         try {
             ResponseEntity<Map> response = restTemplate.exchange(
                 url, HttpMethod.GET,
-                new HttpEntity<>(headers),
-                Map.class
+                new HttpEntity<>(headers), Map.class
             );
 
-            if (response.getBody() == null) {
-                log.warn("Respuesta vacía de la API");
+            if (response.getBody() == null) return;
+
+            // Respuesta: { "data": { "data": [...], "hasNextPage": bool } }
+            Map<String, Object> outer = (Map<String, Object>) response.getBody().get("data");
+            if (outer == null) return;
+
+            List<Map<String, Object>> fixtures = (List<Map<String, Object>>) outer.get("data");
+            if (fixtures == null || fixtures.isEmpty()) {
+                log.info("Sin partidos terminados aún para {}", today);
                 return;
             }
 
-            // La API devuelve { "success": 1, "result": [...] }
-            Object resultObj = response.getBody().get("result");
-            if (!(resultObj instanceof List)) {
-                log.warn("Formato inesperado en respuesta de la API: {}", response.getBody());
-                return;
-            }
-
-            List<Map<String, Object>> apiMatches = (List<Map<String, Object>>) resultObj;
             List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
+            log.info("Fixtures API: {} | Partidos en DB: {}", fixtures.size(), dbMatches.size());
 
-            log.info("Partidos en API: {} | Partidos en DB hoy: {}", apiMatches.size(), dbMatches.size());
+            for (Map<String, Object> fixture : fixtures) {
+                // Solo procesar si tiene resultado (result != null y != "")
+                String result = (String) fixture.get("result");
+                if (result == null || result.isBlank()) continue;
 
-            for (Map<String, Object> apiMatch : apiMatches) {
-                String status = String.valueOf(apiMatch.get("event_status"));
-                if (!"Finished".equalsIgnoreCase(status)) continue;
+                // En datos históricos: player1 = GANADOR, player2 = PERDEDOR
+                Map<String, Object> p1 = (Map<String, Object>) fixture.get("player1");
+                Map<String, Object> p2 = (Map<String, Object>) fixture.get("player2");
+                if (p1 == null || p2 == null) continue;
 
-                String p1     = String.valueOf(apiMatch.get("event_first_player"));
-                String p2     = String.valueOf(apiMatch.get("event_second_player"));
-                String winner = String.valueOf(apiMatch.get("event_winner")); // "First Player" o "Second Player"
+                String winnerName = (String) p1.get("name");
+                String loserName  = (String) p2.get("name");
 
+                // Buscar en DB cruzando por apellido
                 dbMatches.stream()
-                    .filter(m -> nombresCoinciden(m.getPlayer1(), m.getPlayer2(), p1, p2))
+                    .filter(m -> coincidePartido(m, winnerName, loserName))
                     .findFirst()
                     .ifPresent(m -> {
-                        MatchResultDto dto = buildResult(m, apiMatch, winner);
+                        MatchResultDto dto = parsearResultado(m, winnerName, result);
                         if (dto != null) {
                             matchAdminService.saveResult(m.getId(), dto);
-                            log.info("✓ Resultado guardado: {} vs {} → {}",
-                                m.getPlayer1(), m.getPlayer2(), dto.getWinner());
+                            log.info("✓ Resultado: {} derrotó a {} ({})",
+                                winnerName, loserName, result);
                         }
                     });
             }
 
         } catch (Exception e) {
-            log.error("Error al sincronizar con API de tenis: {}", e.getMessage(), e);
-        }
-    }
-
-    private MatchResultDto buildResult(Match match, Map<String, Object> apiMatch, String winnerField) {
-        try {
-            // event_final_result: "2 - 0" o "2 - 1"
-            String finalResult = String.valueOf(apiMatch.get("event_final_result"));
-            int setsWinner = 0;
-
-            if (finalResult != null && finalResult.contains(" - ")) {
-                String[] parts = finalResult.split(" - ");
-                setsWinner = Integer.parseInt(parts[0].trim());
-            }
-
-            // event_game_result: "6-3, 6-4" o "6-3, 4-6, 6-2"
-            String gameResult = String.valueOf(apiMatch.get("event_game_result"));
-            int totalGamesWinner = 0, totalGamesLoser = 0;
-
-            if (gameResult != null && !gameResult.equals("null") && !gameResult.equals("-")) {
-                String[] sets = gameResult.split(",");
-                for (String set : sets) {
-                    set = set.trim().replaceAll("\\(.*\\)", "").trim();
-                    if (set.contains("-")) {
-                        String[] games = set.split("-");
-                        if (games.length == 2) {
-                            try {
-                                int g1 = Integer.parseInt(games[0].trim());
-                                int g2 = Integer.parseInt(games[1].trim());
-                                totalGamesWinner += g1;
-                                totalGamesLoser  += g2;
-                            } catch (NumberFormatException ignored) {}
-                        }
-                    }
-                }
-            }
-
-            // "First Player" gana → player1 de nuestra DB es el ganador
-            boolean firstPlayerWon = "First Player".equalsIgnoreCase(winnerField);
-            String winnerName = firstPlayerWon ? match.getPlayer1() : match.getPlayer2();
-
-            // Si ganó el segundo jugador, invertir los games
-            if (!firstPlayerWon) {
-                int tmp = totalGamesWinner;
-                totalGamesWinner = totalGamesLoser;
-                totalGamesLoser  = tmp;
-            }
-
-            return MatchResultDto.builder()
-                .winner(winnerName)
-                .setsWinner(setsWinner > 0 ? setsWinner : null)
-                .gamesWinner(totalGamesWinner > 0 ? totalGamesWinner : null)
-                .gamesLoser(totalGamesLoser  > 0 ? totalGamesLoser  : null)
-                .build();
-
-        } catch (Exception e) {
-            log.error("Error parseando resultado del partido {}: {}", match.getId(), e.getMessage());
-            return null;
+            log.error("Error sincronizando: {}", e.getMessage(), e);
         }
     }
 
     /**
-     * Compara por apellido para tolerar diferencias de formato.
-     * Ej: "Carlos Alcaraz" vs "C. Alcaraz" → true
+     * Parsea el resultado "6-3 6-4" o "6-3 4-6 6-2"
+     * player1 de la API = ganador
      */
-    private boolean nombresCoinciden(String dbP1, String dbP2, String apiP1, String apiP2) {
-        String last1db  = apellido(dbP1);
-        String last2db  = apellido(dbP2);
-        String last1api = apellido(apiP1);
-        String last2api = apellido(apiP2);
+    private MatchResultDto parsearResultado(Match match, String winnerName, String result) {
+        try {
+            String[] sets = result.trim().split("\\s+");
+            int setsGanados = sets.length; // 2 o 3
+            int gamesWinner = 0, gamesLoser = 0;
 
-        return (last1db.equalsIgnoreCase(last1api) && last2db.equalsIgnoreCase(last2api))
-            || (last1db.equalsIgnoreCase(last2api) && last2db.equalsIgnoreCase(last1api));
+            for (String set : sets) {
+                // Puede venir "6-3" o "7-6(4)"
+                String setLimpio = set.replaceAll("\\(.*\\)", "").trim();
+                if (setLimpio.contains("-")) {
+                    String[] games = setLimpio.split("-");
+                    gamesWinner += Integer.parseInt(games[0].trim());
+                    gamesLoser  += Integer.parseInt(games[1].trim());
+                }
+            }
+
+            // Determinar nombre correcto del ganador en nuestra DB
+            String ganadorEnDB = apellido(winnerName).equalsIgnoreCase(apellido(match.getPlayer1()))
+                ? match.getPlayer1() : match.getPlayer2();
+
+            return MatchResultDto.builder()
+                .winner(ganadorEnDB)
+                .setsWinner(setsGanados)
+                .gamesWinner(gamesWinner > 0 ? gamesWinner : null)
+                .gamesLoser(gamesLoser  > 0 ? gamesLoser  : null)
+                .build();
+
+        } catch (Exception e) {
+            log.error("Error parseando '{}': {}", result, e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean coincidePartido(Match m, String apiWinner, String apiLoser) {
+        String lastW  = apellido(apiWinner);
+        String lastL  = apellido(apiLoser);
+        String lastP1 = apellido(m.getPlayer1());
+        String lastP2 = apellido(m.getPlayer2());
+        return (lastP1.equalsIgnoreCase(lastW) && lastP2.equalsIgnoreCase(lastL))
+            || (lastP1.equalsIgnoreCase(lastL) && lastP2.equalsIgnoreCase(lastW));
     }
 
     private String apellido(String nombre) {

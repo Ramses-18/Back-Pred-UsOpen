@@ -29,7 +29,7 @@ app:
   deadline-offset-minutes: 30
   tennis-api:
     key: ${TENNIS_API_KEY:65a0448ce2mshb4bf03bd4afcd36p171c0cjsn93f1b45dbac1}
-    host: tennisapi1.p.rapidapi.com
+    host: tennis-api-atp-wta-itf.p.rapidapi.com
 
 cors:
   allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app}

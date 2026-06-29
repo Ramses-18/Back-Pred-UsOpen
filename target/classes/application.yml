@@ -9,17 +9,16 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: none
-    show-sql: false
+      ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   sql:
     init:
-      mode: none
+      mode: never
 
-      
+
 server:
   port: ${PORT:8081}
 

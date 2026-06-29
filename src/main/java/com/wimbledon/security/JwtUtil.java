@@ -19,7 +19,6 @@ public class JwtUtil {
     @Value("${app.jwt.expiration-ms}")
     private long expirationMs;
 
-    // Cambiado de Key a SecretKey (Requisito de JJWT 0.12+)
     private SecretKey key() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
@@ -36,7 +35,6 @@ public class JwtUtil {
     }
 
     public String extractEmail(String token) {
-        // Nueva sintaxis: parser() -> verifyWith() -> parseSignedClaims() -> getPayload()
         return Jwts.parser()
             .verifyWith(key())
             .build()
@@ -47,7 +45,6 @@ public class JwtUtil {
 
     public boolean validate(String token) {
         try {
-            // Nueva sintaxis de validación limpia para 0.12.x
             Jwts.parser()
                 .verifyWith(key())
                 .build()

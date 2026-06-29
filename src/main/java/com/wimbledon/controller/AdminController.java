@@ -6,8 +6,8 @@ import com.wimbledon.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -15,10 +15,8 @@ import org.springframework.web.bind.annotation.*;
 public class AdminController {
 
     private final MatchAdminService          matchAdminService;
-    private final TournamentPickServiceFacade facade ;
-
-    // Only allow ADMIN role (checked via DB role stored in JWT claims)
-    // Simplified: in prod add @PreAuthorize("hasRole('ADMIN')")
+    private final TournamentPickServiceFacade facade;
+    private final TennisApiService           tennisApiService;
 
     @PostMapping("/matches")
     public ResponseEntity<Match> createMatch(@Valid @RequestBody MatchCreateRequest req) {
@@ -41,5 +39,12 @@ public class AdminController {
     public ResponseEntity<TournamentPickDto> saveTournamentResult(
             @RequestBody TournamentPickRequest req) {
         return ResponseEntity.ok(facade.saveResult(req));
+    }
+
+    /** Fuerza la sincronización con la API de tenis inmediatamente */
+    @PostMapping("/sync")
+    public ResponseEntity<Map<String, String>> syncNow() {
+        tennisApiService.syncResults();
+        return ResponseEntity.ok(Map.of("status", "Sincronización ejecutada"));
     }
 }

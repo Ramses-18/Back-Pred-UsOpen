@@ -1,28 +1,25 @@
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-lingering-tooth-atffslnk-pooler.c-9.us-east-1.aws.neon.tech/neondb?user=neondb_owner&password=npg_BEnS6QOutx3a&sslmode=require&channelBinding=require}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-lingering-tooth-atffslnk-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require}
     username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
-    password: ${SPRING_DATASOURCE_PASSWORD:18042004}
+    password: ${SPRING_DATASOURCE_PASSWORD:npg_BEnS6QOutx3a}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
 
-
-jpa:
-  hibernate:
-    ddl-auto: false
-  show-sql: false
-  properties:
+  jpa:
     hibernate:
-      dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
-      
-
-
-sql:
-  init:
-    mode: always                # Siempre ejecuta schema.sql al arrancar
-    schema-locations: classpath:schema.sql
-    continue-on-error: true 
-
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true
 
 server:
   port: ${PORT:8081}
@@ -31,10 +28,10 @@ app:
   jwt:
     secret: ${JWT_SECRET:cambiar-este-secreto-en-produccion-minimo-256-bits-requerido-1234567890}
     expiration-ms: 86400000
-    deadline-offset-minutes: 30
+  deadline-offset-minutes: 30
   tennis-api:
-    key: 65a0448ce2mshb4bf03bd4afcd36p171c0cjsn93f1b45dbac1
+    key: ${TENNIS_API_KEY:65a0448ce2mshb4bf03bd4afcd36p171c0cjsn93f1b45dbac1}
     host: tennisapi1.p.rapidapi.com
 
 cors:
-  allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app/}
+  allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app}

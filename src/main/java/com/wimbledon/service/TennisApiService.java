@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -37,13 +39,13 @@ public void syncTodayResults() {
     String today = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
     String url = "https://" + apiHost
         + "/tennis/v2/atp/fixtures/" + today
-        + "?filter=PlayerGroup:singles&pageSize=100";
+        + "?filter=PlayerGroup:singles&pageSize=100&include=tournament,round";
 
     HttpHeaders headers = new HttpHeaders();
     headers.set("X-RapidAPI-Key",  apiKey);
     headers.set("X-RapidAPI-Host", apiHost);
 
-    log.info("Sincronizando resultados ATP - {}", today);
+    log.info("Sincronizando partidos y resultados ATP - {}", today);
 
     try {
         ResponseEntity<Map> response = restTemplate.exchange(
@@ -53,12 +55,8 @@ public void syncTodayResults() {
 
         if (response.getBody() == null) return;
 
-        // La API devuelve: { "data": [...], "hasNextPage": bool }
         Object dataObj = response.getBody().get("data");
-        if (!(dataObj instanceof List)) {
-            log.warn("Formato inesperado, 'data' no es una lista: {}", dataObj);
-            return;
-        }
+        if (!(dataObj instanceof List)) return;
 
         List<Map<String, Object>> fixtures = (List<Map<String, Object>>) dataObj;
         List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
@@ -66,25 +64,76 @@ public void syncTodayResults() {
         log.info("Fixtures API: {} | Partidos en DB hoy: {}", fixtures.size(), dbMatches.size());
 
         for (Map<String, Object> fixture : fixtures) {
-            String result = (String) fixture.get("result");
-            if (result == null || result.isBlank()) continue;
 
             Map<String, Object> p1 = (Map<String, Object>) fixture.get("player1");
             Map<String, Object> p2 = (Map<String, Object>) fixture.get("player2");
             if (p1 == null || p2 == null) continue;
 
-            String winnerName = (String) p1.get("name");
-            String loserName  = (String) p2.get("name");
+            String player1Name = (String) p1.get("name");
+            String player2Name = (String) p2.get("name");
+            if (player1Name == null || player2Name == null) continue;
+
+            // Ignorar partidos de dobles
+            if (player1Name.contains("/") || player2Name.contains("/")) continue;
+
+            // Obtener cancha y ronda si vienen
+            String court = "TBD";
+            String round = null;
+            Map<String, Object> tournament = (Map<String, Object>) fixture.get("tournament");
+            if (tournament != null) {
+                Object courtObj = tournament.get("name");
+                if (courtObj != null) court = courtObj.toString();
+            }
+            Map<String, Object> roundObj = (Map<String, Object>) fixture.get("round");
+            if (roundObj != null) {
+                Object roundName = roundObj.get("name");
+                if (roundName != null) round = roundName.toString();
+            }
+
+            // Obtener hora del partido
+            LocalTime matchTime = LocalTime.of(12, 0); // default
+            Object dateObj = fixture.get("date");
+            if (dateObj != null) {
+                try {
+                    LocalDateTime dt = LocalDateTime.parse(
+                        dateObj.toString().replace("Z", ""),
+                        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                    );
+                    matchTime = dt.toLocalTime();
+                } catch (Exception ignored) {}
+            }
+
+            final String p1Final = player1Name;
+            final String p2Final = player2Name;
+            boolean existeEnDB = dbMatches.stream()
+                .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
+
+            if (!existeEnDB) {
+                Match nuevoPartido = Match.builder()
+                    .matchDate(LocalDate.now())
+                    .matchTime(matchTime)
+                    .court(court)
+                    .player1(player1Name)
+                    .player2(player2Name)
+                    .round(round)
+                    .build();
+                matchRepo.save(nuevoPartido);
+                dbMatches.add(nuevoPartido); 
+                log.info("✓ Partido creado: {} vs {}", player1Name, player2Name);
+            }
+
+            String result = (String) fixture.get("result");
+            if (result == null || result.isBlank()) continue;
 
             dbMatches.stream()
-                .filter(m -> coincidePartido(m, winnerName, loserName))
+                .filter(m -> coincidePartido(m, p1Final, p2Final))
                 .findFirst()
                 .ifPresent(m -> {
-                    MatchResultDto dto = parsearResultado(m, winnerName, result);
+                    MatchResultDto dto = parsearResultado(m, p1Final, result);
                     if (dto != null) {
                         matchAdminService.saveResult(m.getId(), dto);
                         log.info("✓ Resultado: {} derrotó a {} ({})",
-                            winnerName, loserName, result);
+                            p1Final, p2Final, result);
                     }
                 });
         }
@@ -94,10 +143,6 @@ public void syncTodayResults() {
     }
 }
 
-    /**
-     * Parsea el resultado "6-3 6-4" o "6-3 4-6 6-2"
-     * player1 de la API = ganador
-     */
     private MatchResultDto parsearResultado(Match match, String winnerName, String result) {
         try {
             String[] sets = result.trim().split("\\s+");
@@ -114,7 +159,6 @@ public void syncTodayResults() {
                 }
             }
 
-            // Determinar nombre correcto del ganador en nuestra DB
             String ganadorEnDB = apellido(winnerName).equalsIgnoreCase(apellido(match.getPlayer1()))
                 ? match.getPlayer1() : match.getPlayer2();
 

@@ -37,7 +37,7 @@ public class AuthService {
         User user = userRepo.findByEmail(req.getEmail())
             .orElseThrow(() -> new IllegalArgumentException("Credenciales incorrectas."));
         if (!encoder.matches(req.getPassword(), user.getPassword()))
-            throw new IllegalArgumentException("Credenciales incorrectas.");
+            throw new IllegalArgumentException("Credenciales incorrectas 2.");
         String token = jwtUtil.generate(user.getEmail(), user.getRole());
         return new AuthResponse(token, user.getName(), user.getEmail(), user.getRole());
     }

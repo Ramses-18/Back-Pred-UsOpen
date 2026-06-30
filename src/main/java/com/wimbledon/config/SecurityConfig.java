@@ -50,9 +50,14 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
-                .anyRequest().authenticated()
-            )
+            .requestMatchers("/api/auth/**").permitAll()
+            .requestMatchers("/api/matches/today").permitAll() 
+            .anyRequest().authenticated()
+)
+            //.authorizeHttpRequests(auth -> auth
+            //    .requestMatchers("/api/auth/**").permitAll()
+            //    .anyRequest().authenticated()
+            //)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -60,7 +65,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        List<String> origins = Arrays.asList(allowedOriginsRaw.split(","));
+        //List<String> origins = Arrays.asList(allowedOriginsRaw.split(","));
+        List<String> origins = Arrays.asList(
+            "https://front-wimbledon-2dgb.vercel.app", 
+            "http://localhost:5173", 
+            "http://localhost:3000"
+        );
         cfg.setAllowedOrigins(origins);
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));

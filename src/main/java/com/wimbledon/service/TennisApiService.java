@@ -66,6 +66,7 @@ public class TennisApiService {
 
                 Map<String, Object> p1 = (Map<String, Object>) fixture.get("player1");
                 Map<String, Object> p2 = (Map<String, Object>) fixture.get("player2");
+
                 if (p1 == null || p2 == null) continue;
 
                 String player1Name = (String) p1.get("name");
@@ -78,7 +79,15 @@ public class TennisApiService {
                 // Solo Wimbledon
                 String court = "Wimbledon";
                 String round = null;
+
                 Map<String, Object> tournament = (Map<String, Object>) fixture.get("tournament");
+                log.info("Fixture: {} vs {} | status: {} | result: {} | tournament: {}",
+                player1Name, player2Name,
+                fixture.get("event_status"),
+                fixture.get("result"),
+                tournament != null ? tournament.get("name") : "null"
+                );
+
                 if (tournament != null) {
                     String tName = String.valueOf(tournament.get("name"));
                     if (!tName.toLowerCase().contains("wimbledon")) continue;
@@ -140,6 +149,12 @@ public class TennisApiService {
                         }
                     });
             }
+
+
+
+
+
+
 
         } catch (Exception e) {
             log.error("Error sincronizando: {}", e.getMessage(), e);

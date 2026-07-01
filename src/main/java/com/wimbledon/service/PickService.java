@@ -50,19 +50,19 @@ public class PickService {
             Pick p = optPick.get();
             int pts = optRes.isPresent() ? scoreService.calcPickPoints(p, optRes.get()) : 0;
             pickDto = PickDto.builder()
-                .matchId(m.getId())
-                .winner(p.getWinner())
-                .setsWinner(p.getSetsWinner())
-                .gamesWinner(p.getGamesWinner())
-                .gamesLoser(p.getGamesLoser())
-                .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
-                .pointsEarned(pts)
-                .set1W(p.getSet1W()).set1L(p.getSet1L())
-                .set2W(p.getSet2W()).set2L(p.getSet2L())
-                .set3W(p.getSet3W()).set3L(p.getSet3L())
-                .set4W(p.getSet4W()).set4L(p.getSet4L())
-                .set5W(p.getSet5W()).set5L(p.getSet5L())
-                .build();
+            .matchId(m.getId())
+            .winner(p.getWinner())
+            .setsWinner(safeInt(p.getSetsWinner()))
+            .gamesWinner(safeInt(p.getGamesWinner()))
+            .gamesLoser(safeInt(p.getGamesLoser()))
+            .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
+            .pointsEarned(pts)
+            .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
+            .set2W(safeInt(p.getSet2W())).set2L(safeInt(p.getSet2L()))
+            .set3W(safeInt(p.getSet3W())).set3L(safeInt(p.getSet3L()))
+            .set4W(safeInt(p.getSet4W())).set4L(safeInt(p.getSet4L()))
+            .set5W(safeInt(p.getSet5W())).set5L(safeInt(p.getSet5L()))
+            .build();
         }
 
         return MatchDto.builder()
@@ -145,5 +145,9 @@ public class PickService {
     private User findUser(String email) {
         return userRepo.findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
+    }
+
+    private Integer safeInt(Integer value) {
+        return value != null ? value : 0;
     }
 }

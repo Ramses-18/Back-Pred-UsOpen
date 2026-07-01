@@ -23,9 +23,8 @@ public class Pick {
     private String winner;
 
     @Column(name = "sets_winner")  private Integer setsWinner;
-    @Column(name = "games_winner") private Integer gamesWinner;
-    @Column(name = "games_loser")  private Integer gamesLoser;
-
+    @Column(name = "sets_loser") private Integer setsLoser;
+    
     // Sets individuales — ganador
     @Column(name = "set1_w") private Integer set1W;
     @Column(name = "set1_l") private Integer set1L;

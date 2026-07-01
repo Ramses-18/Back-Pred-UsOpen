@@ -53,8 +53,7 @@ public class PickService {
             .matchId(m.getId())
             .winner(p.getWinner())
             .setsWinner(safeInt(p.getSetsWinner()))
-            .gamesWinner(safeInt(p.getGamesWinner()))
-            .gamesLoser(safeInt(p.getGamesLoser()))
+            .setsLoser(safeInt(p.getSetsLoser()))
             .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
             .pointsEarned(pts)
             .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
@@ -107,8 +106,7 @@ public class PickService {
         Pick pick = existing.orElse(Pick.builder().user(user).match(match).build());
         pick.setWinner(req.getWinner());
         pick.setSetsWinner(req.getSetsWinner());
-        pick.setGamesWinner(req.getGamesWinner());
-        pick.setGamesLoser(req.getGamesLoser());
+        pick.setSetsLoser(req.getSetsLoser());
         pick.setIsCorrection(req.isUseCorrection());
         pick.setUpdatedAt(LocalDateTime.now());
 

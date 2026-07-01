@@ -7,8 +7,7 @@ import lombok.Data;
 public class PickRequest {
     @NotBlank private String winner;
     private Integer setsWinner;
-    private Integer gamesWinner;
-    private Integer gamesLoser;
+    private Integer setsLoser;
     private boolean useCorrection;
 
     // Sets individuales

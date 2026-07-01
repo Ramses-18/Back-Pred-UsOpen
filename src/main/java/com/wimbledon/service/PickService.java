@@ -113,11 +113,16 @@ public class PickService {
         pick.setUpdatedAt(LocalDateTime.now());
 
         // Guardar sets individuales
-        pick.setSet1W(req.getSet1W()); pick.setSet1L(req.getSet1L());
-        pick.setSet2W(req.getSet2W()); pick.setSet2L(req.getSet2L());
-        pick.setSet3W(req.getSet3W()); pick.setSet3L(req.getSet3L());
-        pick.setSet4W(req.getSet4W()); pick.setSet4L(req.getSet4L());
-        pick.setSet5W(req.getSet5W()); pick.setSet5L(req.getSet5L());
+        pick.setSet1W(req.getSet1W() != null ? req.getSet1W() : 0);
+        pick.setSet1L(req.getSet1L() != null ? req.getSet1L() : 0);
+        pick.setSet2W(req.getSet2W() != null ? req.getSet2W() : 0);
+        pick.setSet2L(req.getSet2L() != null ? req.getSet2L() : 0);
+        pick.setSet3W(req.getSet3W() != null ? req.getSet3W() : 0);
+        pick.setSet3L(req.getSet3L() != null ? req.getSet3L() : 0);
+        pick.setSet4W(req.getSet4W() != null ? req.getSet4W() : 0);
+        pick.setSet4L(req.getSet4L() != null ? req.getSet4L() : 0);
+        pick.setSet5W(req.getSet5W() != null ? req.getSet5W() : 0);
+        pick.setSet5L(req.getSet5L() != null ? req.getSet5L() : 0);
 
         pickRepo.save(pick);
 

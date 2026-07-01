@@ -23,4 +23,7 @@ public class PickDto {
     private int set4L;
     private int set5W;
     private int set5L;
+
+
+    
 }

@@ -31,8 +31,7 @@ public class MatchAdminService {
 
         res.setWinner(dto.getWinner());
         res.setSetsWinner(dto.getSetsWinner());
-        res.setGamesWinner(dto.getGamesWinner());
-        res.setGamesLoser(dto.getGamesLoser());
+        res.setSetsLoser(dto.getSetsLoser());
         res.setGameResult(dto.getGameResult());
 
         // Sets individuales

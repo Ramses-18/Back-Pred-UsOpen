@@ -190,8 +190,7 @@ public class TennisApiService {
             return MatchResultDto.builder()
                 .winner(ganadorEnDB)
                 .setsWinner(setsGanados)
-                .gamesWinner(totalGamesW > 0 ? totalGamesW : null)
-                .gamesLoser(totalGamesL  > 0 ? totalGamesL  : null)
+                .setsLoser(5 - setsGanados)
                 .gameResult(result)
                 // Sets individuales
                 .set1W(sets.length > 0 ? setW[0] : null)

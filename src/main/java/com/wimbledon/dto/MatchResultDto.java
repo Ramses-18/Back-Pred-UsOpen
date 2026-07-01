@@ -7,8 +7,7 @@ import lombok.Data;
 public class MatchResultDto {
     private String winner;
     private Integer setsWinner;
-    private Integer gamesWinner;
-    private Integer gamesLoser;
+    private Integer setsLoser;
     private String gameResult;   // "6-3 6-4" string original de la API
 
     // Sets individuales del resultado real

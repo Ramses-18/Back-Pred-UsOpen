@@ -19,8 +19,7 @@ public class MatchResult {
     private String winner;
 
     @Column(name = "sets_winner") private Integer setsWinner;
-    @Column(name = "games_winner") private Integer gamesWinner;
-    @Column(name = "games_loser")  private Integer gamesLoser;
+    @Column(name = "sets_loser") private Integer setsLoser;
 
     // Sets individuales del resultado real
     @Column(name = "set1_w") private Integer set1W;

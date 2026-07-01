@@ -146,10 +146,6 @@ public class TennisApiService {
         }
     }
 
-    /**
-     * Parsea "6-3 6-4" o "6-3 4-6 6-2" y guarda sets individuales.
-     * player1 de la API = ganador.
-     */
     private MatchResultDto parsearResultado(Match match, String winnerName, String result) {
         try {
             String[] sets = result.trim().split("\\s+");

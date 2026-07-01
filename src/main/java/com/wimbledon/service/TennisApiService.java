@@ -37,7 +37,7 @@ public class TennisApiService {
     public void syncTodayResults() {
         String today = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
         String url = "https://" + apiHost
-            + "/tennis/v2/atp/fixtures/wimbledon/" + today
+            + "/tennis/v2/atp/fixtures/" + today
             + "?filter=PlayerGroup:singles&pageSize=100&include=tournament,round";
 
         HttpHeaders headers = new HttpHeaders();

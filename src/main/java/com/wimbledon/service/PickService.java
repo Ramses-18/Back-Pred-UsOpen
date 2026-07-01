@@ -111,10 +111,10 @@ public class PickService {
     }
 
     private boolean isDeadlinePassed(Match match) {
-        LocalDateTime firstMatchDt = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
-        LocalDateTime deadline = firstMatchDt.minusMinutes(deadlineOffsetMinutes);
-        return LocalDateTime.now().isAfter(deadline);
-    }
+    LocalDateTime matchStart = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
+    LocalDateTime deadline = matchStart.minusMinutes(5);
+    return LocalDateTime.now().isAfter(deadline);
+}
 
     private User findUser(String email) {
         return userRepo.findByEmail(email)

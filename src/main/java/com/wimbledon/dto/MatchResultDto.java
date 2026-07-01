@@ -1,20 +1,25 @@
 package com.wimbledon.dto;
-import lombok.AllArgsConstructor;
+
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class MatchResultDto {
 
-   // public static Object builder() {
-     //   throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    //}
-    
+@Data @Builder
+public class MatchResultDto {
     private String winner;
     private Integer setsWinner;
     private Integer gamesWinner;
     private Integer gamesLoser;
+    private String gameResult;   // "6-3 6-4" string original de la API
+
+    // Sets individuales del resultado real
+    private Integer set1W;
+    private Integer set1L;
+    private Integer set2W;
+    private Integer set2L;
+    private Integer set3W;
+    private Integer set3L;
+    private Integer set4W;
+    private Integer set4L;
+    private Integer set5W;
+    private Integer set5L;
 }

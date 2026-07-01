@@ -28,10 +28,20 @@ public class MatchAdminService {
             .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
         MatchResult res = resultRepo.findByMatchId(matchId)
             .orElse(MatchResult.builder().match(match).build());
+
         res.setWinner(dto.getWinner());
         res.setSetsWinner(dto.getSetsWinner());
         res.setGamesWinner(dto.getGamesWinner());
         res.setGamesLoser(dto.getGamesLoser());
+        res.setGameResult(dto.getGameResult());
+
+        // Sets individuales
+        res.setSet1W(dto.getSet1W()); res.setSet1L(dto.getSet1L());
+        res.setSet2W(dto.getSet2W()); res.setSet2L(dto.getSet2L());
+        res.setSet3W(dto.getSet3W()); res.setSet3L(dto.getSet3L());
+        res.setSet4W(dto.getSet4W()); res.setSet4L(dto.getSet4L());
+        res.setSet5W(dto.getSet5W()); res.setSet5L(dto.getSet5L());
+
         res.setEnteredAt(LocalDateTime.now());
         resultRepo.save(res);
         return dto;

@@ -13,42 +13,72 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ScoreService {
 
-    private static final int PTS_WINNER        = 1;
-    private static final int PTS_SETS          = 3;
-    private static final int PTS_EXACT         = 10;
-    private static final int PTS_CHAMPION      = 15;
-    private static final int PTS_SEMIFINALIST  = 10;
+    private static final int PTS_WINNER       = 1;
+    private static final int PTS_SETS         = 3;
+    private static final int PTS_EXACT        = 10;
+    private static final int PTS_CHAMPION     = 15;
+    private static final int PTS_SEMIFINALIST = 10;
 
-    private final UserRepository          userRepo;
-    private final PickRepository          pickRepo;
-    private final MatchResultRepository   resultRepo;
-    private final DailyCorrectionRepository corrRepo;
-    private final TournamentPickRepository tPickRepo;
+    private final UserRepository             userRepo;
+    private final PickRepository             pickRepo;
+    private final MatchResultRepository      resultRepo;
+    private final DailyCorrectionRepository  corrRepo;
+    private final TournamentPickRepository   tPickRepo;
     private final TournamentResultRepository tResultRepo;
 
-    /** Calculates daily match points for a single user */
+    /** Calcula puntos de un pick individual contra su resultado */
+    public int calcPickPoints(Pick pick, MatchResult res) {
+        int pts = 0;
+        if (!pick.getWinner().equalsIgnoreCase(res.getWinner())) return 0;
+
+        pts += PTS_WINNER;
+
+        // +3 si acertó los sets ganados
+        if (pick.getSetsWinner() != null && pick.getSetsWinner().equals(res.getSetsWinner()))
+            pts += PTS_SETS;
+
+        // +10 si acertó el resultado exacto set a set
+        if (esResultadoExacto(pick, res))
+            pts += PTS_EXACT;
+
+        return pts;
+    }
+
+    /** Compara los sets individuales del pick con el resultado real */
+    private boolean esResultadoExacto(Pick pick, MatchResult res) {
+        // Necesita al menos el set 1
+        if (pick.getSet1W() == null || res.getSet1W() == null) return false;
+
+        boolean s1 = eq(pick.getSet1W(), res.getSet1W()) && eq(pick.getSet1L(), res.getSet1L());
+        boolean s2 = eq(pick.getSet2W(), res.getSet2W()) && eq(pick.getSet2L(), res.getSet2L());
+
+        // Set 3-5: si ambos son null se considera correcto (partido no llegó a ese set)
+        boolean s3 = ambosNull(pick.getSet3W(), res.getSet3W())
+            || (eq(pick.getSet3W(), res.getSet3W()) && eq(pick.getSet3L(), res.getSet3L()));
+        boolean s4 = ambosNull(pick.getSet4W(), res.getSet4W())
+            || (eq(pick.getSet4W(), res.getSet4W()) && eq(pick.getSet4L(), res.getSet4L()));
+        boolean s5 = ambosNull(pick.getSet5W(), res.getSet5W())
+            || (eq(pick.getSet5W(), res.getSet5W()) && eq(pick.getSet5L(), res.getSet5L()));
+
+        return s1 && s2 && s3 && s4 && s5;
+    }
+
+    private boolean eq(Integer a, Integer b) { return a != null && a.equals(b); }
+    private boolean ambosNull(Integer a, Integer b) { return a == null && b == null; }
+
+    /** Puntos diarios totales de un usuario */
     public int calcDailyPoints(User user) {
         int pts = 0;
         List<Pick> picks = pickRepo.findTodayPicksByUserId(user.getId());
         for (Pick pick : picks) {
             Optional<MatchResult> optRes = resultRepo.findByMatchId(pick.getMatch().getId());
             if (optRes.isEmpty()) continue;
-            MatchResult res = optRes.get();
-
-            if (pick.getWinner().equalsIgnoreCase(res.getWinner())) {
-                pts += PTS_WINNER;
-                if (pick.getSetsWinner() != null && pick.getSetsWinner().equals(res.getSetsWinner()))
-                    pts += PTS_SETS;
-                if (pick.getSetsWinner() != null && pick.getSetsWinner().equals(res.getSetsWinner())
-                        && pick.getGamesWinner() != null && pick.getGamesWinner().equals(res.getGamesWinner())
-                        && pick.getGamesLoser()  != null && pick.getGamesLoser().equals(res.getGamesLoser()))
-                    pts += PTS_EXACT;
-            }
+            pts += calcPickPoints(pick, optRes.get());
         }
         return pts;
     }
 
-    /** Calculates tournament bonus points for a single user */
+    /** Puntos de torneo de un usuario */
     public int calcTournamentPoints(User user) {
         Optional<TournamentResult> optTr = tResultRepo.findTopByOrderByIdDesc();
         if (optTr.isEmpty()) return 0;
@@ -62,10 +92,10 @@ public class ScoreService {
         if (tr.getChampion() != null && tr.getChampion().equalsIgnoreCase(tp.getChampion()))
             pts += PTS_CHAMPION;
 
-        Set<String> realSemis = Set.of(
+        Set<String> realSemis = new HashSet<>(Arrays.asList(
             orEmpty(tr.getSemi1()), orEmpty(tr.getSemi2()),
             orEmpty(tr.getSemi3()), orEmpty(tr.getSemi4())
-        );
+        ));
         for (String s : List.of(orEmpty(tp.getSemi1()), orEmpty(tp.getSemi2()),
                                  orEmpty(tp.getSemi3()), orEmpty(tp.getSemi4()))) {
             if (!s.isEmpty() && realSemis.contains(s)) pts += PTS_SEMIFINALIST;
@@ -73,7 +103,7 @@ public class ScoreService {
         return pts;
     }
 
-    /** Builds full leaderboard sorted by total points desc */
+    /** Tabla de posiciones completa */
     public List<LeaderboardEntryDto> buildLeaderboard() {
         List<User> users = userRepo.findAll();
         LocalDate today = LocalDate.now();

@@ -29,219 +29,186 @@ public class TennisApiService {
     @Value("${app.tennis-api.host}")
     private String apiHost;
 
-    private final MatchRepository   matchRepo;
+    private final MatchRepository matchRepo;
     private final MatchAdminService matchAdminService;
-    private final RestTemplate      restTemplate;
+    private final RestTemplate restTemplate;
 
-    @Scheduled(fixedDelay = 600_000)
+    @Scheduled(fixedDelay = 120_000) // cada 2 minutos — es live
     public void syncTodayResults() {
-        String today = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
-        String url = "https://" + apiHost
-            + "/tennis/v2/atp/fixtures/" + today
-            + "?filter=PlayerGroup:singles&pageSize=100&include=tournament,round";
+        String url = "https://" + apiHost + "/tennis/v2/extend/api/events/live";
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("X-RapidAPI-Key",  apiKey);
+        headers.set("X-RapidAPI-Key", apiKey);
         headers.set("X-RapidAPI-Host", apiHost);
 
-        log.info("Sincronizando partidos y resultados ATP - {}", today);
+        log.info("Sincronizando scores en vivo - Wimbledon");
 
         try {
             ResponseEntity<Map> response = restTemplate.exchange(
-                url, HttpMethod.GET,
-                new HttpEntity<>(headers), Map.class
-            );
+                    url, HttpMethod.GET,
+                    new HttpEntity<>(headers), Map.class);
 
-            if (response.getBody() == null) return;
+            if (response.getBody() == null)
+                return;
 
-            Object dataObj = response.getBody().get("data");
-            if (!(dataObj instanceof List)) return;
+            Object resultsObj = response.getBody().get("results");
+            if (!(resultsObj instanceof List))
+                return;
 
-            List<Map<String, Object>> fixtures = (List<Map<String, Object>>) dataObj;
+            List<Map<String, Object>> events = (List<Map<String, Object>>) resultsObj;
             List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
 
-            log.info("Fixtures API: {} | Partidos en DB hoy: {}", fixtures.size(), dbMatches.size());
+            // Filtrar solo Wimbledon ATP masculino
+            List<Map<String, Object>> wimbledon = events.stream()
+                    .filter(e -> {
+                        String league = String.valueOf(e.get("league"));
+                        String tourType = String.valueOf(e.get("tourType"));
+                        return league.toLowerCase().contains("wimbledon")
+                                && "atp".equalsIgnoreCase(tourType);
+                    })
+                    .collect(java.util.stream.Collectors.toList());
 
-            for (Map<String, Object> fixture : fixtures) {
+            log.info("Eventos Wimbledon ATP en vivo: {}", wimbledon.size());
 
-                Map<String, Object> p1 = (Map<String, Object>) fixture.get("player1");
-                Map<String, Object> p2 = (Map<String, Object>) fixture.get("player2");
+            for (Map<String, Object> event : wimbledon) {
+                String p1Name = String.valueOf(event.get("participant1"));
+                String p2Name = String.valueOf(event.get("participant2"));
+                String score = String.valueOf(event.get("score")); // "7-6,4-6,4-2"
+                String status = String.valueOf(event.get("status")); // "InPlay" o "Finished"
+                String indicator = String.valueOf(event.get("indicator")); // "1,0" o "0,1"
 
-                if (p1 == null || p2 == null) continue;
+                final String p1Final = p1Name;
+                final String p2Final = p2Name;
 
-                String player1Name = (String) p1.get("name");
-                String player2Name = (String) p2.get("name");
-                if (player1Name == null || player2Name == null) continue;
-
-                // Agregá esto justo después de obtener player1Name y player2Name
-// Solo para partidos de Wimbledon para no llenar los logs
-                
-
-                // Ignorar dobles
-                if (player1Name.contains("/") || player2Name.contains("/")) continue;
-
-                // Solo Wimbledon
-                String court = "Wimbledon";
-                String round = null;
-
-                Map<String, Object> tournament = (Map<String, Object>) fixture.get("tournament");
-                log.info("Fixture: {} vs {} | status: {} | result: {} | tournament: {}",
-                player1Name, player2Name,
-                fixture.get("event_status"),
-                fixture.get("result"),
-                tournament != null ? tournament.get("name") : "null"
-                );
-
-
-                if (tournament != null && String.valueOf(tournament.get("name")).toLowerCase().contains("wimbledon")) {
-                    log.info("WIMBLEDON FIXTURE COMPLETO: {}", fixture.toString());
-                }
-
-                if (tournament != null) {
-                    String tName = String.valueOf(tournament.get("name"));
-                    if (!tName.toLowerCase().contains("wimbledon")) continue;
-                    court = tName;
-                }
-                Map<String, Object> roundObj = (Map<String, Object>) fixture.get("round");
-                if (roundObj != null) {
-                    Object rName = roundObj.get("name");
-                    if (rName != null) round = rName.toString();
-                }
-
-                // Hora del partido
-                LocalTime matchTime = LocalTime.of(12, 0);
-                Object dateObj = fixture.get("date");
-                if (dateObj != null) {
-                    try {
-                        LocalDateTime dt = LocalDateTime.parse(
-                            dateObj.toString().replace("Z", ""),
-                            DateTimeFormatter.ISO_LOCAL_DATE_TIME
-                        );
-                        matchTime = dt.toLocalTime();
-                    } catch (Exception ignored) {}
-                }
-
-                final String p1Final = player1Name;
-                final String p2Final = player2Name;
-
-                // Crear partido si no existe
+                // Crear partido si no existe en DB
                 boolean existeEnDB = dbMatches.stream()
-                    .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
+                        .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
 
                 if (!existeEnDB) {
-                    Match nuevoPartido = Match.builder()
-                        .matchDate(LocalDate.now())
-                        .matchTime(matchTime)
-                        .court(court)
-                        .player1(player1Name)
-                        .player2(player2Name)
-                        .round(round)
-                        .build();
-                    matchRepo.save(nuevoPartido);
-                    dbMatches.add(nuevoPartido);
-                    log.info("✓ Partido creado: {} vs {}", player1Name, player2Name);
+                    Object ts = event.get("startTimestamp");
+                    LocalTime matchTime = LocalTime.of(12, 0);
+                    if (ts != null) {
+                        try {
+                            long epoch = Long.parseLong(ts.toString());
+                            matchTime = java.time.Instant.ofEpochSecond(epoch)
+                                    .atZone(java.time.ZoneId.of("Europe/London"))
+                                    .toLocalTime();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    Match nuevo = Match.builder()
+                            .matchDate(LocalDate.now())
+                            .matchTime(matchTime)
+                            .court("Wimbledon - London")
+                            .player1(p1Name)
+                            .player2(p2Name)
+                            .round(null)
+                            .build();
+                    matchRepo.save(nuevo);
+                    dbMatches.add(nuevo);
+                    log.info("✓ Partido creado: {} vs {}", p1Name, p2Name);
                 }
 
-                // Guardar resultado si terminó
-                String result = (String) fixture.get("result");
-                if (result == null || result.isBlank()) continue;
+                // Guardar resultado solo si terminó
+                if (!"Finished".equalsIgnoreCase(status))
+                    continue;
 
                 dbMatches.stream()
-                    .filter(m -> coincidePartido(m, p1Final, p2Final))
-                    .findFirst()
-                    .ifPresent(m -> {
-                        MatchResultDto dto = parsearResultado(m, p1Final, result);
-                        if (dto != null) {
-                            matchAdminService.saveResult(m.getId(), dto);
-                            log.info("✓ Resultado: {} derrotó a {} ({})",
-                                p1Final, p2Final, result);
-                        }
-                    });
+                        .filter(m -> coincidePartido(m, p1Final, p2Final))
+                        .findFirst()
+                        .ifPresent(m -> {
+                            MatchResultDto dto = parsearResultadoLive(m, p1Final, p2Final, score, indicator);
+                            if (dto != null) {
+                                matchAdminService.saveResult(m.getId(), dto);
+                                log.info("✓ Resultado final: {} vs {} | {} | ganador: {}",
+                                        p1Final, p2Final, score, dto.getWinner());
+                            }
+                        });
             }
 
-
-
-
-
-
-
         } catch (Exception e) {
-            log.error("Error sincronizando: {}", e.getMessage(), e);
+            log.error("Error sincronizando live: {}", e.getMessage(), e);
         }
     }
 
-    private MatchResultDto parsearResultado(Match match, String winnerName, String result) {
+    /**
+     * Parsea score "7-6,4-6,6-3" con indicator "1,0" (participant1 ganó)
+     * o "0,1" (participant2 ganó)
+     */
+    private MatchResultDto parsearResultadoLive(Match match, String p1, String p2,
+            String score, String indicator) {
         try {
-            String[] sets = result.trim().split("\\s+");
-            int setsGanados = sets.length;
+            // indicator "1,0" = p1 ganó | "0,1" = p2 ganó
+            boolean p1Gano = indicator.startsWith("1");
+            String winnerName = p1Gano ? match.getPlayer1() : match.getPlayer2();
 
-            // Arrays para scores por set [ganador, perdedor]
+            // Parsear sets: "7-6,4-6,6-3"
+            String[] sets = score.split(",");
+            int setsGanador = 0;
             int[] setW = new int[5];
             int[] setL = new int[5];
-            int totalGamesW = 0, totalGamesL = 0;
+            int totalGW = 0, totalGL = 0;
 
             for (int i = 0; i < sets.length && i < 5; i++) {
-                String setLimpio = sets[i].replaceAll("\\(.*\\)", "").trim();
-                if (setLimpio.contains("-")) {
-                    String[] games = setLimpio.split("-");
-                    if (games.length == 2) {
+                String set = sets[i].trim().replaceAll("\\(.*\\)", "");
+                if (set.contains("-")) {
+                    String[] parts = set.split("-");
+                    if (parts.length == 2) {
                         try {
-                            setW[i] = Integer.parseInt(games[0].trim());
-                            setL[i] = Integer.parseInt(games[1].trim());
-                            totalGamesW += setW[i];
-                            totalGamesL += setL[i];
-                        } catch (NumberFormatException ignored) {}
+                            int a = Integer.parseInt(parts[0].trim()); // participant1
+                            int b = Integer.parseInt(parts[1].trim()); // participant2
+
+                            // setW = games del ganador, setL = games del perdedor
+                            setW[i] = p1Gano ? a : b;
+                            setL[i] = p1Gano ? b : a;
+                            totalGW += setW[i];
+                            totalGL += setL[i];
+
+                            // Contar sets ganados por el ganador
+                            if (setW[i] > setL[i])
+                                setsGanador++;
+                        } catch (NumberFormatException ignored) {
+                        }
                     }
                 }
             }
 
-            // Determinar nombre del ganador en nuestra DB
-            boolean p1EsGanador = apellido(winnerName).equalsIgnoreCase(apellido(match.getPlayer1()));
-            String ganadorEnDB  = p1EsGanador ? match.getPlayer1() : match.getPlayer2();
-
-            // Si ganó el player2, invertir scores de sets
-            if (!p1EsGanador) {
-                for (int i = 0; i < 5; i++) {
-                    int tmp = setW[i]; setW[i] = setL[i]; setL[i] = tmp;
-                }
-                int tmp = totalGamesW; totalGamesW = totalGamesL; totalGamesL = tmp;
-            }
-
             return MatchResultDto.builder()
-                .winner(ganadorEnDB)
-                .setsWinner(setsGanados)
-                .setsLoser(5 - setsGanados)
-                .gameResult(result)
-                // Sets individuales
-                .set1W(sets.length > 0 ? setW[0] : null)
-                .set1L(sets.length > 0 ? setL[0] : null)
-                .set2W(sets.length > 1 ? setW[1] : null)
-                .set2L(sets.length > 1 ? setL[1] : null)
-                .set3W(sets.length > 2 ? setW[2] : null)
-                .set3L(sets.length > 2 ? setL[2] : null)
-                .set4W(sets.length > 3 ? setW[3] : null)
-                .set4L(sets.length > 3 ? setL[3] : null)
-                .set5W(sets.length > 4 ? setW[4] : null)
-                .set5L(sets.length > 4 ? setL[4] : null)
-                .build();
+                    .winner(winnerName)
+                    .setsWinner(setsGanador > 0 ? setsGanador : null)
+                    .gamesWinner(totalGW > 0 ? totalGW : null)
+                    .gamesLoser(totalGL > 0 ? totalGL : null)
+                    .gameResult(score)
+                    .set1W(sets.length > 0 ? setW[0] : null)
+                    .set1L(sets.length > 0 ? setL[0] : null)
+                    .set2W(sets.length > 1 ? setW[1] : null)
+                    .set2L(sets.length > 1 ? setL[1] : null)
+                    .set3W(sets.length > 2 ? setW[2] : null)
+                    .set3L(sets.length > 2 ? setL[2] : null)
+                    .set4W(sets.length > 3 ? setW[3] : null)
+                    .set4L(sets.length > 3 ? setL[3] : null)
+                    .set5W(sets.length > 4 ? setW[4] : null)
+                    .set5L(sets.length > 4 ? setL[4] : null)
+                    .build();
 
         } catch (Exception e) {
-            log.error("Error parseando '{}': {}", result, e.getMessage());
+            log.error("Error parseando resultado live '{}': {}", score, e.getMessage());
             return null;
         }
     }
 
     private boolean coincidePartido(Match m, String apiP1, String apiP2) {
-        String l1db  = apellido(m.getPlayer1());
-        String l2db  = apellido(m.getPlayer2());
+        String l1db = apellido(m.getPlayer1());
+        String l2db = apellido(m.getPlayer2());
         String l1api = apellido(apiP1);
         String l2api = apellido(apiP2);
         return (l1db.equalsIgnoreCase(l1api) && l2db.equalsIgnoreCase(l2api))
-            || (l1db.equalsIgnoreCase(l2api) && l2db.equalsIgnoreCase(l1api));
+                || (l1db.equalsIgnoreCase(l2api) && l2db.equalsIgnoreCase(l1api));
     }
 
     private String apellido(String nombre) {
-        if (nombre == null || nombre.isBlank()) return "";
+        if (nombre == null || nombre.isBlank())
+            return "";
         String[] p = nombre.trim().split("\\s+");
         return p[p.length - 1].toLowerCase();
     }

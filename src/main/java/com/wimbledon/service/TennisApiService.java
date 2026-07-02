@@ -73,6 +73,10 @@ public class TennisApiService {
                 String player2Name = (String) p2.get("name");
                 if (player1Name == null || player2Name == null) continue;
 
+                // Agregá esto justo después de obtener player1Name y player2Name
+// Solo para partidos de Wimbledon para no llenar los logs
+                
+
                 // Ignorar dobles
                 if (player1Name.contains("/") || player2Name.contains("/")) continue;
 
@@ -87,6 +91,11 @@ public class TennisApiService {
                 fixture.get("result"),
                 tournament != null ? tournament.get("name") : "null"
                 );
+
+
+                if (tournament != null && String.valueOf(tournament.get("name")).toLowerCase().contains("wimbledon")) {
+                    log.info("WIMBLEDON FIXTURE COMPLETO: {}", fixture.toString());
+                }
 
                 if (tournament != null) {
                     String tName = String.valueOf(tournament.get("name"));

@@ -10,6 +10,8 @@ public class MatchResultDto {
     private Integer setsLoser;
     private String gameResult;   // "6-3 6-4" string original de la API
 
+
+
     // Sets individuales del resultado real
     private Integer set1W;
     private Integer set1L;

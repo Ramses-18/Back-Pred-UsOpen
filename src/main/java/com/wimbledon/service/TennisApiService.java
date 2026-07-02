@@ -147,7 +147,6 @@ public class TennisApiService {
             int setsGanador = 0;
             int[] setW = new int[5];
             int[] setL = new int[5];
-            int totalGW = 0, totalGL = 0;
 
             for (int i = 0; i < sets.length && i < 5; i++) {
                 String set = sets[i].trim().replaceAll("\\(.*\\)", "");
@@ -161,8 +160,6 @@ public class TennisApiService {
                             // setW = games del ganador, setL = games del perdedor
                             setW[i] = p1Gano ? a : b;
                             setL[i] = p1Gano ? b : a;
-                            totalGW += setW[i];
-                            totalGL += setL[i];
 
                             // Contar sets ganados por el ganador
                             if (setW[i] > setL[i])
@@ -176,8 +173,6 @@ public class TennisApiService {
             return MatchResultDto.builder()
                     .winner(winnerName)
                     .setsWinner(setsGanador > 0 ? setsGanador : null)
-                    .gamesWinner(totalGW > 0 ? totalGW : null)
-                    .gamesLoser(totalGL > 0 ? totalGL : null)
                     .gameResult(score)
                     .set1W(sets.length > 0 ? setW[0] : null)
                     .set1L(sets.length > 0 ? setL[0] : null)

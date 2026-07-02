@@ -2,16 +2,28 @@ package com.wimbledon.dto;
 import lombok.Builder;
 import lombok.Data;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+
 @Data @Builder
 public class MatchDto {
     private Long id;
     private LocalDate matchDate;
-    private LocalTime matchTime;
+    private LocalTime matchTime;       // ahora puede ser null
     private String court;
     private String player1;
     private String player2;
     private String round;
+
+    private Integer orderInCourt;
+    private Long followsMatchId;
+    private String status;             // SCHEDULED | IN_PLAY | FINISHED | ...
+    private LocalDateTime actualStartTime;
+    private LocalDateTime actualEndTime;
+
+    // Hora estimada de inicio calculada por el back
+    private LocalTime estimatedStartTime;
+
     private MatchResultDto result;
     private PickDto myPick;
     private boolean deadlinePassed;

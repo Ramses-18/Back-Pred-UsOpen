@@ -11,12 +11,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,116 +28,210 @@ public class TennisApiService {
 
     @Value("${app.tennis-api.key}")
     private String apiKey;
-
     @Value("${app.tennis-api.host}")
     private String apiHost;
+    @Value("${app.tennis-api.base-url}")
+    private String baseUrl; // https://api-sports.io/tennis
 
     private final MatchRepository matchRepo;
     private final MatchAdminService matchAdminService;
     private final RestTemplate restTemplate;
 
-    @Scheduled(fixedDelay = 120_000) // cada 2 minutos — es live
-    public void syncTodayResults() {
-        String url = "https://" + apiHost + "/tennis/v2/extend/api/events/live";
+    // A las 6:00 AM Londres — trae TODO el schedule del día y arma la cola por
+    // cancha
+    @Scheduled(cron = "0 0 6 * * *", zone = "Europe/London")
+    public void syncDailySchedule() {
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
+        String url = baseUrl + "/fixtures?date=" + today + "&league=84"; // 84 = Wimbledon
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-RapidAPI-Key", apiKey);
-        headers.set("X-RapidAPI-Host", apiHost);
-
-        log.info("Sincronizando scores en vivo - Wimbledon");
-
+        HttpHeaders headers = apiHeaders();
         try {
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET,
-                    new HttpEntity<>(headers), Map.class);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            List<Map<String, Object>> fixtures = (List) resp.getBody().get("response");
 
-            if (response.getBody() == null)
-                return;
+            // Agrupar por venue (cancha)
+            Map<String, List<Map<String, Object>>> byCourt = fixtures.stream()
+                    .collect(Collectors
+                            .groupingBy(f -> ((Map) ((Map) f.get("fixture")).get("venue")).get("name").toString()));
 
-            Object resultsObj = response.getBody().get("results");
-            if (!(resultsObj instanceof List))
-                return;
+            // Para cada cancha, ordenar por timestamp y crear matches con orderInCourt y
+            // followsMatchId
+            for (var entry : byCourt.entrySet()) {
+                String court = entry.getKey();
+                List<Map<String, Object>> courtMatches = entry.getValue().stream()
+                        .sorted(Comparator
+                                .comparing(f -> Long.valueOf(((Map) f.get("fixture")).get("timestamp").toString())))
+                        .collect(Collectors.toList());
 
-            List<Map<String, Object>> events = (List<Map<String, Object>>) resultsObj;
-            List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
+                Long previousId = null;
+                int order = 1;
+                for (Map<String, Object> fx : courtMatches) {
+                    String apiEventId = String.valueOf(((Map) fx.get("fixture")).get("id"));
+                    // Upsert: si ya existe por apiEventId, update; si no, create
+                    Match m = matchRepo.findByApiEventId(apiEventId)
+                            .orElseGet(() -> new Match());
 
-            // Filtrar solo Wimbledon ATP masculino
-            List<Map<String, Object>> wimbledon = events.stream()
-                    .filter(e -> {
-                        String league = String.valueOf(e.get("league"));
-                        String tourType = String.valueOf(e.get("tourType"));
-                        return league.toLowerCase().contains("wimbledon")
-                                && "atp".equalsIgnoreCase(tourType);
-                    })
-                    .collect(java.util.stream.Collectors.toList());
+                    Map fixture = (Map) fx.get("fixture");
+                    Map players = (Map) fx.get("players"); // [{player:{name}}, {player:{name}}]
 
-            log.info("Eventos Wimbledon ATP en vivo: {}", wimbledon.size());
+                    m.setMatchDate(today);
+                    m.setMatchTime(timestampToLocalTime(fixture.get("timestamp")));
+                    m.setCourt(court);
+                    m.setPlayer1(playerName(players, 0));
+                    m.setPlayer2(playerName(players, 1));
+                    m.setRound(((Map) fx.get("league")).get("round").toString());
+                    m.setOrderInCourt(order);
+                    m.setFollowsMatchId(previousId);
+                    m.setApiEventId(apiEventId);
+                    if (m.getStatus() == null)
+                        m.setStatus("SCHEDULED");
 
-            for (Map<String, Object> event : wimbledon) {
-                String p1Name = String.valueOf(event.get("participant1"));
-                String p2Name = String.valueOf(event.get("participant2"));
-                String score = String.valueOf(event.get("score")); // "7-6,4-6,4-2"
-                String status = String.valueOf(event.get("status")); // "InPlay" o "Finished"
-                String indicator = String.valueOf(event.get("indicator")); // "1,0" o "0,1"
-
-                final String p1Final = p1Name;
-                final String p2Final = p2Name;
-
-                // Crear partido si no existe en DB
-                boolean existeEnDB = dbMatches.stream()
-                        .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
-
-                if (!existeEnDB) {
-                    Object ts = event.get("startTimestamp");
-                    LocalTime matchTime = LocalTime.of(12, 0);
-                    if (ts != null) {
-                        try {
-                            long epoch = Long.parseLong(ts.toString());
-                            matchTime = java.time.Instant.ofEpochSecond(epoch)
-                                    .atZone(java.time.ZoneId.of("Europe/London"))
-                                    .toLocalTime();
-                        } catch (Exception ignored) {
-                        }
-                    }
-                    Match nuevo = Match.builder()
-                            .matchDate(LocalDate.now())
-                            .matchTime(matchTime)
-                            .court("Wimbledon - London")
-                            .player1(p1Name)
-                            .player2(p2Name)
-                            .round(null)
-                            .build();
-                    matchRepo.save(nuevo);
-                    dbMatches.add(nuevo);
-                    log.info("✓ Partido creado: {} vs {}", p1Name, p2Name);
+                    matchRepo.save(m);
+                    previousId = m.getId();
+                    order++;
                 }
+            }
+            log.info("✓ Schedule del día sincronizado: {} partidos en {} canchas",
+                    fixtures.size(), byCourt.size());
+        } catch (Exception e) {
+            log.error("Error en syncDailySchedule: {}", e.getMessage(), e);
+        }
+    }
 
-                // Guardar resultado solo si terminó
-                if (!"Finished".equalsIgnoreCase(status))
+    // Cada 2 min — actualiza status y scores de los partidos en vivo
+    @Scheduled(fixedDelay = 120_000)
+    public void syncLiveStatus() {
+        List<Match> scheduledOrLive = matchRepo.findByMatchDateAndStatusIn(
+                LocalDate.now(ZoneId.of("Europe/London")),
+                List.of("SCHEDULED", "IN_PLAY", "SUSPENDED"));
+
+        if (scheduledOrLive.isEmpty())
+            return;
+
+        for (Match m : scheduledOrLive) {
+            if (m.getApiEventId() == null)
+                continue;
+            try {
+                String url = baseUrl + "/fixtures?id=" + m.getApiEventId();
+                ResponseEntity<Map> resp = restTemplate.exchange(
+                        url, HttpMethod.GET, new HttpEntity<>(apiHeaders()), Map.class);
+                List<Map<String, Object>> results = (List) resp.getBody().get("response");
+                if (results.isEmpty())
                     continue;
 
-                dbMatches.stream()
-                        .filter(m -> coincidePartido(m, p1Final, p2Final))
-                        .findFirst()
-                        .ifPresent(m -> {
-                            MatchResultDto dto = parsearResultadoLive(m, p1Final, p2Final, score, indicator);
-                            if (dto != null) {
-                                matchAdminService.saveResult(m.getId(), dto);
-                                log.info("✓ Resultado final: {} vs {} | {} | ganador: {}",
-                                        p1Final, p2Final, score, dto.getWinner());
-                            }
-                        });
-            }
+                Map fixture = (Map) ((Map) results.get(0)).get("fixture");
+                String status = ((Map) fixture.get("status")).get("code").toString(); // NS, IN, FIN, ...
 
-        } catch (Exception e) {
-            log.error("Error sincronizando live: {}", e.getMessage(), e);
+                // Transición SCHEDULED -> IN_PLAY: registrar actualStartTime
+                if ("IN".equals(status) && "SCHEDULED".equals(m.getStatus())) {
+                    m.setActualStartTime(LocalDateTime.now());
+                    m.setStatus("IN_PLAY");
+                    matchRepo.save(m);
+                    log.info("🎾 Arrancó: {} vs {} en {}", m.getPlayer1(), m.getPlayer2(), m.getCourt());
+                }
+
+                // Transición a FINISHED: guardar resultado + propagar a siguientes
+                if (("FIN".equals(status) || "WO".equals(status) || "ABD".equals(status))
+                        && !"FINISHED".equals(m.getStatus())) {
+                    m.setActualEndTime(LocalDateTime.now());
+                    m.setStatus("FINISHED");
+                    matchRepo.save(m);
+
+                    // Extraer score y indicator del fixture de API-Sports
+                    Map scoresMap = (Map) results.get(0).get("scores"); // {"set1": {"player1": 6, "player2": 4}, ...}
+                    String score = buildScoreString(scoresMap); // "6-4,3-6,7-5"
+                    String indicator = buildIndicator(scoresMap); // "1,0" si ganó p1, "0,1" si ganó p2
+                    String p1 = m.getPlayer1();
+                    String p2 = m.getPlayer2();
+
+                    MatchResultDto dto = parsearResultadoLive(m, p1, p2, score, indicator);
+                    if (dto != null) {
+                        matchAdminService.saveResult(m.getId(), dto);
+                        log.info("✓ Resultado final: {} vs {} | {} | ganador: {}", p1, p2, score, dto.getWinner());
+                    }
+
+                    recalcularEstimadosEnCancha(m.getCourt(), m.getMatchDate());
+                }
+            } catch (Exception e) {
+                log.error("Error sync match {}: {}", m.getApiEventId(), e.getMessage());
+            }
         }
     }
 
     /**
-     * Parsea score "7-6,4-6,6-3" con indicator "1,0" (participant1 ganó)
-     * o "0,1" (participant2 ganó)
+     * Convierte el mapa de scores de API-Sports:
+     * {"set1":{"player1":6,"player2":4}, "set2":{"player1":3,"player2":6},
+     * "set3":{"player1":7,"player2":5}}
+     * al formato que tu parsearResultadoLive ya entiende:
+     * "6-4,3-6,7-5"
      */
+    private String buildScoreString(Map scores) {
+        if (scores == null)
+            return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= 5; i++) {
+            Object setObj = scores.get("set" + i);
+            if (!(setObj instanceof Map))
+                break;
+            Map s = (Map) setObj;
+            Object a = s.get("player1");
+            Object b = s.get("player2");
+            if (a == null || b == null)
+                break;
+            if (sb.length() > 0)
+                sb.append(",");
+            sb.append(a).append("-").append(b);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Determina quién ganó a partir de los sets.
+     * Cuenta sets ganados por cada player y devuelve "1,0" o "0,1".
+     * En caso de WO o ABD donde no haya sets jugados, default "1,0"
+     * (tu parseResultadoLive ya maneja el caso de winner basándose en indicator).
+     */
+    private String buildIndicator(Map scores) {
+        if (scores == null)
+            return "1,0";
+        int p1Sets = 0, p2Sets = 0;
+        for (int i = 1; i <= 5; i++) {
+            Object setObj = scores.get("set" + i);
+            if (!(setObj instanceof Map))
+                break;
+            Map s = (Map) setObj;
+            Object a = s.get("player1");
+            Object b = s.get("player2");
+            if (a == null || b == null)
+                break;
+            try {
+                int ga = Integer.parseInt(a.toString());
+                int gb = Integer.parseInt(b.toString());
+                if (ga > gb)
+                    p1Sets++;
+                else if (gb > ga)
+                    p2Sets++;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return p1Sets >= p2Sets ? "1,0" : "0,1";
+    }
+
+    private void recalcularEstimadosEnCancha(String court, LocalDate date) {
+        List<Match> cola = matchRepo.findByMatchDateAndCourtOrderByOrderInCourtAsc(date, court);
+        for (Match m : cola) {
+            if ("SCHEDULED".equals(m.getStatus()) && m.getFollowsMatchId() != null) {
+                // Si el padre terminó, este puede arrancar ahora → estimated = ahora + 10 min
+                Match padre = matchRepo.findById(m.getFollowsMatchId()).orElse(null);
+                if (padre != null && padre.getActualEndTime() != null) {
+                    // El front mostrará "A continuación" en vez de hora
+                    log.debug("Partido {} listo para arrancar en {}", m.getId(), court);
+                }
+            }
+        }
+    }
+
     private MatchResultDto parsearResultadoLive(Match match, String p1, String p2,
             String score, String indicator) {
         try {
@@ -192,19 +289,31 @@ public class TennisApiService {
         }
     }
 
-    private boolean coincidePartido(Match m, String apiP1, String apiP2) {
-        String l1db = apellido(m.getPlayer1());
-        String l2db = apellido(m.getPlayer2());
-        String l1api = apellido(apiP1);
-        String l2api = apellido(apiP2);
-        return (l1db.equalsIgnoreCase(l1api) && l2db.equalsIgnoreCase(l2api))
-                || (l1db.equalsIgnoreCase(l2api) && l2db.equalsIgnoreCase(l1api));
+    private HttpHeaders apiHeaders() {
+        HttpHeaders h = new HttpHeaders();
+        h.set("X-RapidAPI-Key", apiKey);
+        h.set("X-RapidAPI-Host", apiHost);
+        return h;
     }
 
-    private String apellido(String nombre) {
-        if (nombre == null || nombre.isBlank())
-            return "";
-        String[] p = nombre.trim().split("\\s+");
-        return p[p.length - 1].toLowerCase();
+    private LocalTime timestampToLocalTime(Object ts) {
+        if (ts == null)
+            return null;
+        try {
+            long epoch = Long.parseLong(ts.toString());
+            return Instant.ofEpochSecond(epoch)
+                    .atZone(ZoneId.of("Europe/London"))
+                    .toLocalTime();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String playerName(Map players, int idx) {
+        try {
+            return ((Map) ((List) players).get(idx)).get("name").toString();
+        } catch (Exception e) {
+            return "TBD";
+        }
     }
 }

@@ -139,17 +139,60 @@ public class PickService {
 
     // Cierre 5 minutos antes de cada partido individualmente
     private boolean isDeadlinePassed(Match match) {
-        LocalDateTime matchStart = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
-        LocalDateTime deadline = matchStart.minusMinutes(5);
-        return LocalDateTime.now().isAfter(deadline);
+    // 1. Si el partido ya arrancó o terminó, SIEMPRE cerró
+    if (!"SCHEDULED".equals(match.getStatus())) {
+        return true;
     }
+
+    // 2. Si tiene hora tentativa (not-before), deadline = 5 min antes
+    if (match.getMatchTime() != null && match.getMatchDate() != null) {
+        LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
+        return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
+    }
+
+    // 3. Si no tiene hora pero depende de otro partido (follows_match_id),
+    //    el deadline = 5 min antes del estimated start del partido "padre"
+    if (match.getFollowsMatchId() != null) {
+        Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
+        if (parent != null && parent.getActualEndTime() != null) {
+            // El Partido ya terminó → este partido podría arrancar en cualquier momento
+            // Damos 5 min de gracia desde que terminó el padre
+            return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
+        }
+        // El padre no terminó → todavía se puede pronosticar
+        return false;
+    }
+
+    // 4. Sin hora y sin padre: caso raro (partido flotante), dejamos abierto
+    return false;
+}
 
     private User findUser(String email) {
         return userRepo.findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 
+    private LocalTime computeEstimatedStart(Match m) {
+    // Si ya arrancó, la hora real
+    if (m.getActualStartTime() != null) return m.getActualStartTime().toLocalTime();
+    // Si tiene hora tentativa, esa
+    if (m.getMatchTime() != null) return m.getMatchTime();
+    // Si sigue a otro partido: hora fin del padre + buffer 10 min (cambio de lado)
+    if (m.getFollowsMatchId() != null) {
+        Match parent = matchRepo.findById(m.getFollowsMatchId()).orElse(null);
+        if (parent != null && parent.getActualEndTime() != null) {
+            return parent.getActualEndTime().plusMinutes(10).toLocalTime();
+        }
+        // Padre no terminó: estimar con la hora tentativa del padre + 2h promedio
+        if (parent != null && parent.getMatchTime() != null) {
+            return parent.getMatchTime().plusHours(2);
+        }
+    }
+    return null; // desconocido
+}
+
     private Integer safeInt(Integer value) {
         return value != null ? value : 0;
     }
 }
+

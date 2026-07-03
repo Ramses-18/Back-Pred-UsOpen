@@ -1,6 +1,5 @@
 package com.wimbledon.service;
 
-import com.wimbledon.dto.MatchResultDto;
 import com.wimbledon.entity.Match;
 import com.wimbledon.repository.MatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,10 +10,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,215 +29,139 @@ public class TennisApiService {
     private String baseUrl;
 
     private final MatchRepository matchRepo;
-    private final MatchAdminService matchAdminService;
-    private final CourtQueueService courtQueueService;
     private final RestTemplate restTemplate;
 
     /**
-     * Cada 2 min — actualiza status y scores de partidos en vivo.
-     * Para partidos cargados manualmente (sin apiEventId), busca el eventId
-     * vía /event/get/{player1}/{player2}/{date} y lo linkea.
+     * Cada 2 minutos — trae partidos en vivo de la API y los inserta en DB
+     * si no existen. NO cambia status ni guarda resultados (eso lo hace el admin).
      */
     @Scheduled(fixedDelay = 120_000)
-    public void syncLiveStatus() {
+    public void syncLiveEvents() {
         LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
-        List<Match> scheduledOrLive = matchRepo.findByMatchDateAndStatusIn(
-            today, List.of("SCHEDULED", "IN_PLAY", "SUSPENDED"));
+        String url = baseUrl + "/tennis/v2/extend/api/events/live";
 
-        log.info("[syncLive] === INICIO === partidos a revisar: {}", scheduledOrLive.size());
+        HttpHeaders headers = apiHeaders();
+        log.info("[syncLiveEvents] === INICIO === consultando {}", url);
 
-        int sinApiEventId = 0;
-        int linkeados = 0;
-        int actualizados = 0;
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
 
-        for (Match m : scheduledOrLive) {
-            if (m.getApiEventId() == null) {
-                sinApiEventId++;
-                // Intentar linkear con la API
-                String apiEventId = fetchApiEventId(m.getPlayer1(), m.getPlayer2(), m.getMatchDate());
-                if (apiEventId == null) {
-                    log.debug("[syncLive] match {} ({} vs {}) sin eventId en API todavía",
-                        m.getId(), m.getPlayer1(), m.getPlayer2());
-                    continue;
-                }
-                m.setApiEventId(apiEventId);
-                matchRepo.save(m);
-                linkeados++;
-                log.info("[syncLive] ✓ match {} linkeado con apiEventId={}",
-                    m.getId(), apiEventId);
+            if (response.getBody() == null) {
+                log.info("[syncLiveEvents] respuesta vacía");
+                return;
             }
 
-            try {
-                Optional<Map<String, Object>> liveEvent = findLiveEventById(m.getApiEventId());
-                if (liveEvent.isEmpty()) {
-                    // No está en live todavía → sigue SCHEDULED
-                    continue;
-                }
-
-                Map<String, Object> event = liveEvent.get();
-                String status = String.valueOf(event.get("status")); // "InPlay" | "Finished"
-                String score = String.valueOf(event.get("score"));
-                String indicator = String.valueOf(event.get("indicator"));
-
-                // Transición SCHEDULED -> IN_PLAY
-                if ("InPlay".equalsIgnoreCase(status) && "SCHEDULED".equals(m.getStatus())) {
-                    m.setActualStartTime(LocalDateTime.now());
-                    m.setStatus("IN_PLAY");
-                    matchRepo.save(m);
-                    actualizados++;
-                    log.info("[syncLive] 🎾 Arrancó: {} vs {} en {}",
-                        m.getPlayer1(), m.getPlayer2(), m.getCourt());
-                }
-
-                // Transición a FINISHED
-                if ("Finished".equalsIgnoreCase(status) && !"FINISHED".equals(m.getStatus())) {
-                    log.info("[syncLive] detectado FINISHED para match {} ({} vs {})",
-                        m.getId(), m.getPlayer1(), m.getPlayer2());
-
-                    MatchResultDto dto = parsearResultadoLive(m, m.getPlayer1(), m.getPlayer2(), score, indicator);
-                    if (dto != null) {
-                        matchAdminService.saveResult(m.getId(), dto);
-                        actualizados++;
-                        log.info("[syncLive] ✓ Resultado guardado: {} vs {} | {} | ganador: {}",
-                            m.getPlayer1(), m.getPlayer2(), score, dto.getWinner());
-                    } else {
-                        log.error("[syncLive] no se pudo parsear resultado para match {}: score='{}'",
-                            m.getId(), score);
-                        // Igual marcar como FINISHED para que no se quede colgado
-                        m.setStatus("FINISHED");
-                        m.setActualEndTime(LocalDateTime.now());
-                        matchRepo.save(m);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("[syncLive] error en match {} (apiEventId={}): {}",
-                    m.getId(), m.getApiEventId(), e.getMessage());
+            Object resultsObj = response.getBody().get("results");
+            if (!(resultsObj instanceof List)) {
+                log.info("[syncLiveEvents] no hay lista 'results'");
+                return;
             }
-        }
 
-        log.info("[syncLive] === FIN === sin eventId: {}, linkeados: {}, actualizados: {}",
-            sinApiEventId, linkeados, actualizados);
-    }
-
-    /**
-     * Busca el eventId en matchstat por jugadores + fecha.
-     * Endpoint: GET /event/get/{player1}/{player2}/{date}
-     */
-    public String fetchApiEventId(String player1, String player2, LocalDate date) {
-        try {
-            // matchstat espera apellidos o nombres completos (probar con apellido)
-            String p1 = lastName(player1);
-            String p2 = lastName(player2);
-            String url = String.format("%s/tennis/v2/extend/api/event/get/%s/%s/%s",
-                baseUrl,
-                URLEncoder.encode(p1, StandardCharsets.UTF_8),
-                URLEncoder.encode(p2, StandardCharsets.UTF_8),
-                date.toString());
-
-            log.debug("[fetchApiEventId] GET {}", url);
-
-            ResponseEntity<Map> resp = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(apiHeaders()), Map.class);
-
-            if (resp.getBody() == null) return null;
-            Object results = resp.getBody().get("results");
-            if (!(results instanceof List)) return null;
-            List<?> list = (List<?>) results;
-            if (list.isEmpty()) return null;
-
-            Map<String, Object> first = (Map<String, Object>) list.get(0);
-            Object id = first.get("event_id");
-            if (id == null) id = first.get("id");
-            return id == null ? null : String.valueOf(id);
-        } catch (Exception e) {
-            log.debug("[fetchApiEventId] no encontrado para {} vs {}: {}", player1, player2, e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Busca un evento en /events/live por apiEventId.
-     */
-    private Optional<Map<String, Object>> findLiveEventById(String apiEventId) {
-        try {
-            String url = baseUrl + "/tennis/v2/extend/api/events/live";
-            ResponseEntity<Map> resp = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(apiHeaders()), Map.class);
-            if (resp.getBody() == null) return Optional.empty();
-            Object resultsObj = resp.getBody().get("results");
-            if (!(resultsObj instanceof List)) return Optional.empty();
             List<Map<String, Object>> events = (List<Map<String, Object>>) resultsObj;
+            List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
 
-            return events.stream().filter(e -> {
-                Object id = e.get("event_id");
-                if (id == null) id = e.get("id");
-                return id != null && apiEventId.equals(String.valueOf(id));
-            }).findFirst();
-        } catch (Exception e) {
-            log.error("[findLiveEventById] error: {}", e.getMessage());
-            return Optional.empty();
-        }
-    }
+            List<Map<String, Object>> wimbledon = events.stream()
+                    .filter(e -> {
+                        String league = String.valueOf(e.get("league"));
+                        String tourType = String.valueOf(e.get("tourType"));
+                        return league.toLowerCase().contains("wimbledon")
+                                && "atp".equalsIgnoreCase(tourType);
+                    })
+                    .collect(Collectors.toList());
 
-    /**
-     * Parsea score "7-6,4-6,6-3" con indicator "1,0" (participant1 ganó)
-     * o "0,1" (participant2 ganó).
-     */
-    private MatchResultDto parsearResultadoLive(Match match, String p1, String p2,
-            String score, String indicator) {
-        try {
-            if (score == null || "null".equals(score) || score.isEmpty()) {
-                log.warn("[parsearResultadoLive] score vacío para match {}", match.getId());
-                return null;
-            }
+            log.info("[syncLiveEvents] eventos live totales: {}, Wimbledon ATP: {}",
+                    events.size(), wimbledon.size());
 
-            boolean p1Gano = indicator != null && indicator.startsWith("1");
-            String winnerName = p1Gano ? match.getPlayer1() : match.getPlayer2();
+            int creados = 0;
+            int yaExistian = 0;
 
-            String[] sets = score.split(",");
-            int setsGanador = 0;
-            int[] setW = new int[5];
-            int[] setL = new int[5];
+            for (Map<String, Object> event : wimbledon) {
+                String p1Name = String.valueOf(event.get("participant1"));
+                String p2Name = String.valueOf(event.get("participant2"));
 
-            for (int i = 0; i < sets.length && i < 5; i++) {
-                String set = sets[i].trim().replaceAll("\\(.*\\)", "");
-                if (set.contains("-")) {
-                    String[] parts = set.split("-");
-                    if (parts.length == 2) {
+                final String p1Final = p1Name;
+                final String p2Final = p2Name;
+
+                boolean existeEnDB = dbMatches.stream()
+                        .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
+
+                if (!existeEnDB) {
+                    LocalTime matchTime = LocalTime.of(12, 0);
+                    Object ts = event.get("startTimestamp");
+                    if (ts != null) {
                         try {
-                            int a = Integer.parseInt(parts[0].trim());
-                            int b = Integer.parseInt(parts[1].trim());
-                            setW[i] = p1Gano ? a : b;
-                            setL[i] = p1Gano ? b : a;
-                            if (setW[i] > setL[i]) setsGanador++;
-                        } catch (NumberFormatException ignored) {}
+                            long epoch = Long.parseLong(ts.toString());
+                            matchTime = Instant.ofEpochSecond(epoch)
+                                    .atZone(ZoneId.of("Europe/London"))
+                                    .toLocalTime();
+                        } catch (Exception ignored) {}
                     }
+
+                    String court = "Wimbledon - London";
+                    Object venue = event.get("venue");
+                    if (venue != null && !"null".equals(venue.toString())) {
+                        court = venue.toString();
+                    }
+
+                    Integer maxOrder = matchRepo.findMaxOrderInCourt(today, court);
+                    int orderInCourt = (maxOrder == null ? 0 : maxOrder) + 1;
+
+                    Match nuevo = Match.builder()
+                            .matchDate(today)
+                            .matchTime(matchTime)
+                            .court(court)
+                            .player1(p1Name)
+                            .player2(p2Name)
+                            .round(parseRound(event.get("round")))
+                            .orderInCourt(orderInCourt)
+                            .followsMatchId(null)
+                            .status("SCHEDULED")
+                            .build();
+                    matchRepo.save(nuevo);
+                    dbMatches.add(nuevo);
+                    creados++;
+                    log.info("[syncLiveEvents] ✓ Partido creado: {} vs {} en {} (orden #{})",
+                            p1Name, p2Name, court, orderInCourt);
+                } else {
+                    yaExistian++;
                 }
             }
 
-            MatchResultDto dto = MatchResultDto.builder()
-                .winner(winnerName)
-                .setsWinner(setsGanador > 0 ? setsGanador : null)
-                .gameResult(score)
-                .set1W(sets.length > 0 ? setW[0] : null)
-                .set1L(sets.length > 0 ? setL[0] : null)
-                .set2W(sets.length > 1 ? setW[1] : null)
-                .set2L(sets.length > 1 ? setL[1] : null)
-                .set3W(sets.length > 2 ? setW[2] : null)
-                .set3L(sets.length > 2 ? setL[2] : null)
-                .set4W(sets.length > 3 ? setW[3] : null)
-                .set4L(sets.length > 3 ? setL[3] : null)
-                .set5W(sets.length > 4 ? setW[4] : null)
-                .set5L(sets.length > 4 ? setL[4] : null)
-                .build();
+            log.info("[syncLiveEvents] === FIN === creados: {}, ya existían: {}",
+                    creados, yaExistian);
 
-            log.info("[parsearResultadoLive] match {}: winner={}, sets={}, score={}",
-                match.getId(), winnerName, setsGanador, score);
-            return dto;
         } catch (Exception e) {
-            log.error("[parsearResultadoLive] error parseando '{}': {}", score, e.getMessage());
-            return null;
+            log.error("[syncLiveEvents] error: {}", e.getMessage(), e);
         }
+    }
+
+    private boolean coincidePartido(Match m, String apiP1, String apiP2) {
+        String l1db = apellido(m.getPlayer1());
+        String l2db = apellido(m.getPlayer2());
+        String l1api = apellido(apiP1);
+        String l2api = apellido(apiP2);
+        return (l1db.equalsIgnoreCase(l1api) && l2db.equalsIgnoreCase(l2api))
+                || (l1db.equalsIgnoreCase(l2api) && l2db.equalsIgnoreCase(l1api));
+    }
+
+    private String apellido(String nombre) {
+        if (nombre == null || nombre.isBlank()) return "";
+        String[] p = nombre.trim().split("\\s+");
+        return p[p.length - 1].toLowerCase();
+    }
+
+    private String parseRound(Object round) {
+        if (round == null) return null;
+        String s = round.toString();
+        if (s.contains("128")) return "R128";
+        if (s.contains("64"))  return "R64";
+        if (s.contains("32"))  return "R32";
+        if (s.contains("16"))  return "R16";
+        if (s.toLowerCase().contains("quarter") || s.contains("1/4")) return "QF";
+        if (s.toLowerCase().contains("semi") || s.contains("1/2"))    return "SF";
+        if (s.toLowerCase().contains("final") && !s.contains("semi")) return "F";
+        return s;
     }
 
     private HttpHeaders apiHeaders() {
@@ -247,11 +169,5 @@ public class TennisApiService {
         h.set("X-RapidAPI-Key", apiKey);
         h.set("X-RapidAPI-Host", apiHost);
         return h;
-    }
-
-    private String lastName(String fullName) {
-        if (fullName == null || fullName.isBlank()) return "";
-        String[] parts = fullName.trim().split("\\s+");
-        return parts[parts.length - 1];
     }
 }

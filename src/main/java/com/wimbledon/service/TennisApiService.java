@@ -1,5 +1,6 @@
 package com.wimbledon.service;
 
+import com.wimbledon.dto.MatchResultDto;
 import com.wimbledon.entity.Match;
 import com.wimbledon.repository.MatchRepository;
 import lombok.RequiredArgsConstructor;

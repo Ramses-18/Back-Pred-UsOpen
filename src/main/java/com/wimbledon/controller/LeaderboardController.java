@@ -34,7 +34,7 @@ public class LeaderboardController {
      * GET /api/leaderboard/{userId}/picks
      * Devuelve todos los picks históricos de un usuario con su resultado real y puntos.
      * Ordenado por fecha de partido descendente (más reciente primero).
-   
+     */
     @GetMapping("/{userId}/picks")
     public ResponseEntity<List<HistoricalPickDto>> getUserPicks(@PathVariable Long userId) {
         log.info("[getUserPicks] userId={}", userId);
@@ -42,8 +42,8 @@ public class LeaderboardController {
         User user = userRepo.findById(userId)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
 
-        Optional<Pick> picks = pickRepo.findByUserIdAndMatchId(userId, user); // Assuming you want to fetch all picks for the user, not just a specific match
-        //log.info("[getUserPicks] encontrados {} picks para {}", picks.size(), user.getEmail());
+        List<Pick> picks = pickRepo.findByUserId(userId);
+        log.info("[getUserPicks] encontrados {} picks para {}", picks.size(), user.getEmail());
 
         List<HistoricalPickDto> dtos = picks.stream()
             .map(p -> {
@@ -80,7 +80,4 @@ public class LeaderboardController {
 
         return ResponseEntity.ok(dtos);
     }
-}
-
-  */
 }

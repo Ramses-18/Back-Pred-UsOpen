@@ -4,6 +4,7 @@ import com.wimbledon.dto.*;
 import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PickService {
 
     private final MatchRepository          matchRepo;
@@ -23,7 +25,8 @@ public class PickService {
 
     public List<MatchDto> getTodayMatches(String email) {
         User user = findUser(email);
-        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
+        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
@@ -51,8 +54,7 @@ public class PickService {
             pickDto = PickDto.builder()
             .matchId(m.getId())
             .winner(p.getWinner())
-            .setsWinner(safeInt(p.getSetsWinner()))
-            .setsLoser(safeInt(p.getSetsLoser()))
+            .setsWinner(p.getSetsWinner())
             .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
             .pointsEarned(pts)
             .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
@@ -71,6 +73,12 @@ public class PickService {
             .player1(m.getPlayer1())
             .player2(m.getPlayer2())
             .round(m.getRound())
+            .orderInCourt(m.getOrderInCourt())
+            .followsMatchId(m.getFollowsMatchId())
+            .status(m.getStatus())
+            .actualStartTime(m.getActualStartTime())
+            .actualEndTime(m.getActualEndTime())
+            .estimatedStartTime(computeEstimatedStart(m))
             .result(resDto)
             .myPick(pickDto)
             .deadlinePassed(isDeadlinePassed(m))
@@ -109,17 +117,16 @@ public class PickService {
         pick.setIsCorrection(req.isUseCorrection());
         pick.setUpdatedAt(LocalDateTime.now());
 
-        // Guardar sets individuales
-        pick.setSet1W(req.getSet1W() != null ? req.getSet1W() : 0);
-        pick.setSet1L(req.getSet1L() != null ? req.getSet1L() : 0);
-        pick.setSet2W(req.getSet2W() != null ? req.getSet2W() : 0);
-        pick.setSet2L(req.getSet2L() != null ? req.getSet2L() : 0);
-        pick.setSet3W(req.getSet3W() != null ? req.getSet3W() : 0);
-        pick.setSet3L(req.getSet3L() != null ? req.getSet3L() : 0);
-        pick.setSet4W(req.getSet4W() != null ? req.getSet4W() : 0);
-        pick.setSet4L(req.getSet4L() != null ? req.getSet4L() : 0);
-        pick.setSet5W(req.getSet5W() != null ? req.getSet5W() : 0);
-        pick.setSet5L(req.getSet5L() != null ? req.getSet5L() : 0);
+        pick.setSet1W(req.getSet1W());
+        pick.setSet1L(req.getSet1L());
+        pick.setSet2W(req.getSet2W());
+        pick.setSet2L(req.getSet2L());
+        pick.setSet3W(req.getSet3W());
+        pick.setSet3L(req.getSet3L());
+        pick.setSet4W(req.getSet4W());
+        pick.setSet4L(req.getSet4L());
+        pick.setSet5W(req.getSet5W());
+        pick.setSet5L(req.getSet5L());
 
         pickRepo.save(pick);
 
@@ -128,71 +135,64 @@ public class PickService {
             .winner(pick.getWinner())
             .setsWinner(pick.getSetsWinner())
             .isCorrection(pick.getIsCorrection())
-            .set1W(pick.getSet1W()).set1L(pick.getSet1L())
-            .set2W(pick.getSet2W()).set2L(pick.getSet2L())
-            .set3W(pick.getSet3W()).set3L(pick.getSet3L())
-            .set4W(pick.getSet4W()).set4L(pick.getSet4L())
-            .set5W(pick.getSet5W()).set5L(pick.getSet5L())
+            .set1W(safeInt(pick.getSet1W())).set1L(safeInt(pick.getSet1L()))
+            .set2W(safeInt(pick.getSet2W())).set2L(safeInt(pick.getSet2L()))
+            .set3W(safeInt(pick.getSet3W())).set3L(safeInt(pick.getSet3L()))
+            .set4W(safeInt(pick.getSet4W())).set4L(safeInt(pick.getSet4L()))
+            .set5W(safeInt(pick.getSet5W())).set5L(safeInt(pick.getSet5L()))
             .pointsEarned(0)
             .build();
     }
 
-    // Cierre 5 minutos antes de cada partido individualmente
+    /**
+     * FIX: deadline dinámico basado en status real del match.
+     * - Si el partido ya arrancó o terminó → SIEMPRE cerró.
+     * - Si tiene hora tentativa → deadline = hora - 5 min.
+     * - Si sigue a otro partido → deadline = 5 min después de que termine el padre.
+     * - Si no tiene hora y no sigue a nadie → abierto (no debería pasar).
+     */
     private boolean isDeadlinePassed(Match match) {
-    // 1. Si el partido ya arrancó o terminó, SIEMPRE cerró
-    if (!"SCHEDULED".equals(match.getStatus())) {
-        return true;
-    }
-
-    // 2. Si tiene hora tentativa (not-before), deadline = 5 min antes
-    if (match.getMatchTime() != null && match.getMatchDate() != null) {
-        LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
-        return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
-    }
-
-    // 3. Si no tiene hora pero depende de otro partido (follows_match_id),
-    //    el deadline = 5 min antes del estimated start del partido "padre"
-    if (match.getFollowsMatchId() != null) {
-        Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
-        if (parent != null && parent.getActualEndTime() != null) {
-            // El Partido ya terminó → este partido podría arrancar en cualquier momento
-            // Damos 5 min de gracia desde que terminó el padre
-            return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
+        if (!"SCHEDULED".equals(match.getStatus())) {
+            return true;
         }
-        // El padre no terminó → todavía se puede pronosticar
+
+        if (match.getMatchTime() != null && match.getMatchDate() != null) {
+            LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
+            return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
+        }
+
+        if (match.getFollowsMatchId() != null) {
+            Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
+            if (parent != null && parent.getActualEndTime() != null) {
+                return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
+            }
+            return false;
+        }
+
         return false;
     }
 
-    // 4. Sin hora y sin padre: caso raro (partido flotante), dejamos abierto
-    return false;
-}
+    private LocalTime computeEstimatedStart(Match m) {
+        if (m.getActualStartTime() != null) return m.getActualStartTime().toLocalTime();
+        if (m.getMatchTime() != null) return m.getMatchTime();
+        if (m.getFollowsMatchId() != null) {
+            Match parent = matchRepo.findById(m.getFollowsMatchId()).orElse(null);
+            if (parent != null && parent.getActualEndTime() != null) {
+                return parent.getActualEndTime().plusMinutes(10).toLocalTime();
+            }
+            if (parent != null && parent.getMatchTime() != null) {
+                return parent.getMatchTime().plusHours(2);
+            }
+        }
+        return null;
+    }
 
     private User findUser(String email) {
         return userRepo.findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 
-    private LocalTime computeEstimatedStart(Match m) {
-    // Si ya arrancó, la hora real
-    if (m.getActualStartTime() != null) return m.getActualStartTime().toLocalTime();
-    // Si tiene hora tentativa, esa
-    if (m.getMatchTime() != null) return m.getMatchTime();
-    // Si sigue a otro partido: hora fin del padre + buffer 10 min (cambio de lado)
-    if (m.getFollowsMatchId() != null) {
-        Match parent = matchRepo.findById(m.getFollowsMatchId()).orElse(null);
-        if (parent != null && parent.getActualEndTime() != null) {
-            return parent.getActualEndTime().plusMinutes(10).toLocalTime();
-        }
-        // Padre no terminó: estimar con la hora tentativa del padre + 2h promedio
-        if (parent != null && parent.getMatchTime() != null) {
-            return parent.getMatchTime().plusHours(2);
-        }
-    }
-    return null; // desconocido
-}
-
     private Integer safeInt(Integer value) {
         return value != null ? value : 0;
     }
 }
-

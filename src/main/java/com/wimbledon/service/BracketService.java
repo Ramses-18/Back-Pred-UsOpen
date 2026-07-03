@@ -96,8 +96,10 @@ public class BracketService {
             int currentCount = Integer.parseInt(ROUNDS_DEF[r][2]);
 
             for (int i = 1; i <= currentCount; i++) {
+                final String roundForError = currentRound;
+                final int posForError = i;
                 BracketMatch current = bracketRepo.findByRoundAndPositionInRound(currentRound, i)
-                    .orElseThrow(() -> new IllegalStateException("No se encontró partido " + currentRound + " #" + i));
+                    .orElseThrow(() -> new IllegalStateException("No se encontró partido " + roundForError + " #" + posForError));
 
                 // sourceMatch1 = partido previousRound #(2*i - 1)
                 // sourceMatch2 = partido previousRound #(2*i)

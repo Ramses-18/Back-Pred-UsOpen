@@ -24,13 +24,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+
 public class TennisApiService {
 
     @Value("${app.tennis-api.key}")
     private String apiKey;
     @Value("${app.tennis-api.host}")
     private String apiHost;
-    @Value("${app.tennis-api.base-url}")
+    @Value("${app.tennis-api.base-url:https://api-sports.io/tennis}")
     private String baseUrl; // https://api-sports.io/tennis
 
     private final MatchRepository matchRepo;

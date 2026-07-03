@@ -18,7 +18,7 @@ public class Match {
     @Column(name = "match_date", nullable = false)
     private LocalDate matchDate;
 
-    @Column(name = "match_time", nullable = false)
+    @Column(name = "match_time")
     private LocalTime matchTime;
 
     @Column(nullable = false, length = 60)
@@ -33,11 +33,32 @@ public class Match {
     @Column(length = 40)
     private String round;
 
+    @Column(name = "order_in_court", nullable = false)
+    @Builder.Default
+    private Integer orderInCourt = 1;
+
+    @Column(name = "follows_match_id")
+    private Long followsMatchId;
+
+    @Column(name = "status", nullable = false, length = 12)
+    @Builder.Default
+    private String status = "SCHEDULED";
+
+    @Column(name = "actual_start_time")
+    private LocalDateTime actualStartTime;
+
+    @Column(name = "actual_end_time")
+    private LocalDateTime actualEndTime;
+
+    @Column(name = "api_event_id", length = 40)
+    private String apiEventId;
+
+    // NUEVO — el admin forzó el cierre de pronóstico
+    @Column(name = "deadline_forced", nullable = false)
+    @Builder.Default
+    private Boolean deadlineForced = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-
-    //public Long getId() {
-      //  throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    //}
 }

@@ -33,9 +33,18 @@ public class ScoreService {
 
         pts += PTS_WINNER;
 
-        // +3 si acertó los sets ganados
-        if (pick.getSetsWinner() != null && pick.getSetsWinner().equals(res.getSetsWinner()))
+        // FIX BUG 4: +3 solo si coinciden AMBOS setsWinner y setsLoser
+        // Pick: Alcaraz 3-1, Real: Alcaraz 3-1 → +3
+        // Pick: Alcaraz 3-1, Real: Alcaraz 3-2 → no suma (setsLoser distinto)
+        // Pick: Alcaraz 3-1, Real: Alcaraz 3-0 → no suma (setsLoser distinto)
+        boolean setsWinnerOk = pick.getSetsWinner() != null && res.getSetsWinner() != null
+            && pick.getSetsWinner().equals(res.getSetsWinner());
+        boolean setsLoserOk = pick.getSetsLoser() != null && res.getSetsLoser() != null
+            && pick.getSetsLoser().equals(res.getSetsLoser());
+
+        if (setsWinnerOk && setsLoserOk) {
             pts += PTS_SETS;
+        }
 
         // +10 si acertó el resultado exacto set a set
         if (esResultadoExacto(pick, res))
@@ -113,6 +122,7 @@ public class ScoreService {
             int tournament = calcTournamentPoints(u);
             boolean corrUsed = corrRepo.existsByUserIdAndUsedDate(u.getId(), today);
             return LeaderboardEntryDto.builder()
+                .userId(u.getId())
                 .name(u.getName())
                 .email(u.getEmail())
                 .totalPoints(daily + tournament)

@@ -41,10 +41,34 @@ public class AdminController {
         return ResponseEntity.ok(facade.saveResult(req));
     }
 
-    /** Fuerza la sincronización con la API de tenis inmediatamente */
-    @PostMapping("/sync")
-    public ResponseEntity<Map<String, String>> syncNow() {
-        tennisApiService.syncTodayResults();
-        return ResponseEntity.ok(Map.of("status", "Sincronización ejecutada"));
+    /** Trae partidos en vivo de la API y los inserta en DB si no existen.
+     *  NO cambia status ni guarda resultados — eso lo hace el admin manualmente. */
+    @PostMapping("/sync/live")
+    public ResponseEntity<Map<String, String>> syncLive() {
+        tennisApiService.syncLiveEvents();
+        return ResponseEntity.ok(Map.of("status", "Partidos en vivo sincronizados"));
+    }
+
+    /** Cambio manual de status (admin inicia/suspende/finaliza partido). */
+    @PatchMapping("/matches/{matchId}/status")
+    public ResponseEntity<Match> updateMatchStatus(
+            @PathVariable Long matchId,
+            @RequestBody Map<String, String> body) {
+        String newStatus = body.get("status");
+        return ResponseEntity.ok(matchAdminService.updateStatus(matchId, newStatus));
+    }
+
+    /** NUEVO — Forzar cierre de pronóstico + pasar a IN_PLAY en un solo paso. */
+    @PostMapping("/matches/{matchId}/force-start")
+    public ResponseEntity<Match> forceDeadlineAndStart(@PathVariable Long matchId) {
+        return ResponseEntity.ok(matchAdminService.forceDeadlineAndStart(matchId));
+    }
+
+    /** NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED). */
+    @PatchMapping("/matches/{matchId}/live-score")
+    public ResponseEntity<MatchResultDto> updateLiveScore(
+            @PathVariable Long matchId,
+            @RequestBody MatchResultDto dto) {
+        return ResponseEntity.ok(matchAdminService.updateLiveScore(matchId, dto));
     }
 }

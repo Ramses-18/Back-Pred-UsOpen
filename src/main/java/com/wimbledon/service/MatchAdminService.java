@@ -67,23 +67,23 @@ public class MatchAdminService {
         res.setSetsLoser(dto.getSetsLoser());
         res.setGameResult(dto.getGameResult());
 
-        // FIX BUG 2: guardar null en vez de 0 para sets no cargados
-        res.setSet1W(dto.getSet1W());
-        res.setSet1L(dto.getSet1L());
-        res.setSet2W(dto.getSet2W());
-        res.setSet2L(dto.getSet2L());
-        res.setSet3W(dto.getSet3W());
-        res.setSet3L(dto.getSet3L());
-        res.setSet4W(dto.getSet4W());
-        res.setSet4L(dto.getSet4L());
-        res.setSet5W(dto.getSet5W());
-        res.setSet5L(dto.getSet5L());
+        res.setSet1W(dto.getSet1W() != null ? dto.getSet1W() : 0);
+        res.setSet1L(dto.getSet1L() != null ? dto.getSet1L() : 0);
+        res.setSet2W(dto.getSet2W() != null ? dto.getSet2W() : 0);
+        res.setSet2L(dto.getSet2L() != null ? dto.getSet2L() : 0);
+        res.setSet3W(dto.getSet3W() != null ? dto.getSet3W() : 0);
+        res.setSet3L(dto.getSet3L() != null ? dto.getSet3L() : 0);
+        res.setSet4W(dto.getSet4W() != null ? dto.getSet4W() : 0);
+        res.setSet4L(dto.getSet4L() != null ? dto.getSet4L() : 0);
+        res.setSet5W(dto.getSet5W() != null ? dto.getSet5W() : 0);
+        res.setSet5L(dto.getSet5L() != null ? dto.getSet5L() : 0);
 
         res.setEnteredAt(LocalDateTime.now());
         resultRepo.save(res);
 
         log.info("[saveResult] MatchResult guardado con id={}", res.getId());
 
+        // Marcar match como FINISHED y propagar a la cola
         if (!"FINISHED".equals(match.getStatus())) {
             match.setStatus("FINISHED");
             match.setActualEndTime(LocalDateTime.now());
@@ -98,7 +98,10 @@ public class MatchAdminService {
 
     @Transactional
     public Match updateStatus(Long matchId, String newStatus) {
-        log.info("[updateStatus] matchId={}, nuevo={}", matchId, newStatus);
+        log.info("[updateStatus] matchId={}, status actual={}, nuevo={}",
+            matchId,
+            matchRepo.findById(matchId).map(Match::getStatus).orElse("NULL"),
+            newStatus);
 
         Match m = matchRepo.findById(matchId)
             .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
@@ -115,6 +118,8 @@ public class MatchAdminService {
             case "RETIRED":
             case "ABANDONED":
                 m.setActualEndTime(LocalDateTime.now());
+                // Si hay resultado en match_results, no lo tocamos.
+                // Si no hay, creamos uno mínimo con el ganador inferido del status (si es WO/RET).
                 if (resultRepo.findByMatchId(matchId).isEmpty()) {
                     log.warn("[updateStatus] match {} finalizado SIN resultado en match_results. " +
                              "Cargar resultado manualmente desde el admin.", matchId);
@@ -130,6 +135,7 @@ public class MatchAdminService {
         m.setStatus(upper);
         Match saved = matchRepo.save(m);
 
+        // Si terminó y tiene resultado, propagar a la cola
         if ("FINISHED".equals(upper) || "WALKOVER".equals(upper)
             || "RETIRED".equals(upper) || "ABANDONED".equals(upper)) {
             courtQueueService.recalcularEstimadosEnCancha(saved.getCourt(), saved.getMatchDate());

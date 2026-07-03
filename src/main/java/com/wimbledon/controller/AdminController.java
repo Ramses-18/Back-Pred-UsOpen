@@ -26,6 +26,7 @@ public class AdminController {
     @PostMapping("/matches/{matchId}/result")
     public ResponseEntity<MatchResultDto> saveResult(
             @PathVariable Long matchId, @RequestBody MatchResultDto dto) {
+        // saveResult ahora también marca status=FINISHED y actualEndTime internamente
         return ResponseEntity.ok(matchAdminService.saveResult(matchId, dto));
     }
 
@@ -41,20 +42,29 @@ public class AdminController {
         return ResponseEntity.ok(facade.saveResult(req));
     }
 
-    /** Trae partidos en vivo de la API y los inserta en DB si no existen.
-     *  NO cambia status ni guarda resultados — eso lo hace el admin manualmente. */
+    /** Sincroniza el schedule completo del día (a las 6 AM London se ejecuta solo,
+     *  pero el admin puede forzarlo si se agregaron partidos a última hora).
+    @PostMapping("/sync/schedule")
+    public ResponseEntity<Map<String, String>> syncSchedule() {
+        tennisApiService.syncDailySchedule();
+        return ResponseEntity.ok(Map.of("status", "Schedule del día sincronizado"));
+    }
+    */
+
+    /** Sincroniza status y scores en vivo de los partidos en juego. */
     @PostMapping("/sync/live")
     public ResponseEntity<Map<String, String>> syncLive() {
-        tennisApiService.syncLiveEvents();
-        return ResponseEntity.ok(Map.of("status", "Partidos en vivo sincronizados"));
+        tennisApiService.syncLiveStatus();
+        return ResponseEntity.ok(Map.of("status", "Live sync ejecutado"));
     }
 
-    /** Cambio manual de status (admin inicia/suspende/finaliza partido). */
+    /** Cambio manual de status (para casos que la API no refleja: lluvia, walkover
+     *  declarado por el juez de silla antes que la API lo refleje, etc). */
     @PatchMapping("/matches/{matchId}/status")
     public ResponseEntity<Match> updateMatchStatus(
             @PathVariable Long matchId,
             @RequestBody Map<String, String> body) {
-        String newStatus = body.get("status");
+        String newStatus = body.get("status"); // SCHEDULED | IN_PLAY | SUSPENDED | FINISHED | WALKOVER | RETIRED | ABANDONED
         return ResponseEntity.ok(matchAdminService.updateStatus(matchId, newStatus));
     }
 }

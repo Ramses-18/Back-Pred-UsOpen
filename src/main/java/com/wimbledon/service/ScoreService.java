@@ -78,7 +78,7 @@ public class ScoreService {
     /** Puntos diarios totales de un usuario */
     public int calcDailyPoints(User user) {
         int pts = 0;
-        List<Pick> picks = pickRepo.findTodayPicksByUserId(user.getId());
+        List<Pick> picks = pickRepo.findByUserId(user.getId());
         for (Pick pick : picks) {
             Optional<MatchResult> optRes = resultRepo.findByMatchId(pick.getMatch().getId());
             if (optRes.isEmpty()) continue;

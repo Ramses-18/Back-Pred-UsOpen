@@ -43,12 +43,13 @@ public class AdminController {
     }
 
     /** Sincroniza el schedule completo del día (a las 6 AM London se ejecuta solo,
-     *  pero el admin puede forzarlo si se agregaron partidos a última hora). */
+     *  pero el admin puede forzarlo si se agregaron partidos a última hora).
     @PostMapping("/sync/schedule")
     public ResponseEntity<Map<String, String>> syncSchedule() {
         tennisApiService.syncDailySchedule();
         return ResponseEntity.ok(Map.of("status", "Schedule del día sincronizado"));
     }
+    */
 
     /** Sincroniza status y scores en vivo de los partidos en juego. */
     @PostMapping("/sync/live")

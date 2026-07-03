@@ -33,35 +33,23 @@ public class ScoreService {
 
         pts += PTS_WINNER;
 
-        // +3 si acertó resultado en sets (setsWinner y opcionalmente setsLoser)
-        // Lógica flexible:
-        // 1. Si ambos tienen setsLoser cargado → comparar directo
-        // 2. Si solo uno tiene setsLoser → el otro se infiere y se valida
-        // 3. Si ninguno tiene setsLoser → +3 solo por coincidir setsWinner
-        Integer realSetsWinner = res.getSetsWinner();
-        Integer realSetsLoser  = res.getSetsLoser();
-        Integer pickSetsWinner = pick.getSetsWinner();
-        Integer pickSetsLoser  = pick.getSetsLoser();
+        // +3 si acertó resultado en sets (setsWinner y setsLoser)
+        // Calcular setsWinner y setsLoser reales contando los sets individuales
+        // (más confiable que lo que el admin haya cargado a mano)
+        int[] realCounts = contarSets(res);
+        Integer realSetsWinner = realCounts[0] > 0 ? realCounts[0] : res.getSetsWinner();
+        Integer realSetsLoser  = realCounts[1] > 0 ? realCounts[1] : res.getSetsLoser();
+
+        // Si el pick no tiene setsWinner/setsLoser explícitos, contarlos de sus sets individuales
+        int[] pickCounts = contarSetsPick(pick);
+        Integer pickSetsWinner = pickCounts[0] > 0 ? pickCounts[0] : pick.getSetsWinner();
+        Integer pickSetsLoser  = pickCounts[1] > 0 ? pickCounts[1] : pick.getSetsLoser();
 
         boolean setsWinnerOk = pickSetsWinner != null && realSetsWinner != null
             && pickSetsWinner.equals(realSetsWinner);
 
-        boolean setsLoserOk;
-        if (pickSetsLoser != null && realSetsLoser != null) {
-            // Ambos cargados → comparar directo
-            setsLoserOk = pickSetsLoser.equals(realSetsLoser);
-        } else if (pickSetsLoser != null && realSetsLoser == null && realSetsWinner != null) {
-            // Pick tiene setsLoser pero resultado no → inferir validez
-            setsLoserOk = esSetsLoserValido(pickSetsLoser, realSetsWinner);
-        } else if (pickSetsLoser == null && realSetsLoser != null && pickSetsWinner != null) {
-            // Resultado tiene setsLoser pero pick no → inferir validez
-            setsLoserOk = esSetsLoserValido(realSetsLoser, pickSetsWinner);
-        } else if (pickSetsLoser == null && realSetsLoser == null) {
-            // Ninguno tiene setsLoser → aceptar si setsWinner coincide
-            setsLoserOk = true;
-        } else {
-            setsLoserOk = false;
-        }
+        boolean setsLoserOk = pickSetsLoser != null && realSetsLoser != null
+            && pickSetsLoser.equals(realSetsLoser);
 
         if (setsWinnerOk && setsLoserOk) {
             pts += PTS_SETS;
@@ -75,15 +63,45 @@ public class ScoreService {
     }
 
     /**
-     * Valida si el setsLoser del pick es consistente con el setsWinner del resultado:
-     * - setsWinner=3 → setsLoser ∈ {0, 1, 2} (best of 5)
-     * - setsWinner=2 → setsLoser ∈ {0, 1}    (best of 3)
+     * Cuenta sets ganados por winner y loser a partir de los sets individuales del resultado.
+     * Devuelve [setsWinner, setsLoser].
+     * Solo cuenta sets que tengan valores > 0 en ambos lados (un set jugado).
      */
-    private boolean esSetsLoserValido(Integer setsLoser, Integer setsWinner) {
-        if (setsLoser == null || setsWinner == null) return false;
-        if (setsWinner == 3) return setsLoser >= 0 && setsLoser <= 2;
-        if (setsWinner == 2) return setsLoser >= 0 && setsLoser <= 1;
-        return false;
+    private int[] contarSets(MatchResult res) {
+        int w = 0, l = 0;
+        int[][] sets = {
+            {res.getSet1W(), res.getSet1L()},
+            {res.getSet2W(), res.getSet2L()},
+            {res.getSet3W(), res.getSet3L()},
+            {res.getSet4W(), res.getSet4L()},
+            {res.getSet5W(), res.getSet5L()},
+        };
+        for (int[] s : sets) {
+            if (s[0] != null && s[1] != null && s[0] > 0 && s[1] >= 0) {
+                if (s[0] > s[1]) w++;
+                else if (s[1] > s[0]) l++;
+            }
+        }
+        return new int[]{w, l};
+    }
+
+    /** Igual que contarSets pero para un Pick */
+    private int[] contarSetsPick(Pick pick) {
+        int w = 0, l = 0;
+        int[][] sets = {
+            {pick.getSet1W(), pick.getSet1L()},
+            {pick.getSet2W(), pick.getSet2L()},
+            {pick.getSet3W(), pick.getSet3L()},
+            {pick.getSet4W(), pick.getSet4L()},
+            {pick.getSet5W(), pick.getSet5L()},
+        };
+        for (int[] s : sets) {
+            if (s[0] != null && s[1] != null && s[0] > 0 && s[1] >= 0) {
+                if (s[0] > s[1]) w++;
+                else if (s[1] > s[0]) l++;
+            }
+        }
+        return new int[]{w, l};
     }
 
     /** Compara los sets individuales del pick con el resultado real */

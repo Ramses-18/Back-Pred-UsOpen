@@ -5,7 +5,7 @@ import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
 
-import org.hibernate.validator.internal.util.stereotypes.Lazy;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;

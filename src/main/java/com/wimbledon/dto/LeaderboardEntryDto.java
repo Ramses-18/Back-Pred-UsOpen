@@ -4,6 +4,7 @@ import lombok.Data;
 @Data @Builder
 public class LeaderboardEntryDto {
     private int rank;
+    private Long userId;          // NUEVO — necesario para el link al historial
     private String name;
     private String email;
     private int totalPoints;

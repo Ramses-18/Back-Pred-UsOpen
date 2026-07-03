@@ -4,7 +4,6 @@ import com.wimbledon.dto.LeaderboardEntryDto;
 import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.*;
@@ -12,7 +11,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ScoreService {
 
     private static final int PTS_WINNER       = 1;
@@ -28,98 +26,55 @@ public class ScoreService {
     private final TournamentPickRepository   tPickRepo;
     private final TournamentResultRepository tResultRepo;
 
-    /**
-     * Calcula puntos de un pick individual contra su resultado.
-     * FIX BUG 4: normaliza nombres (trim + lowercase) antes de comparar.
-     */
+    /** Calcula puntos de un pick individual contra su resultado */
     public int calcPickPoints(Pick pick, MatchResult res) {
-        if (pick == null || res == null) return 0;
+        int pts = 0;
+        if (!pick.getWinner().equalsIgnoreCase(res.getWinner())) return 0;
 
-        String pickWinner = normalize(pick.getWinner());
-        String resWinner  = normalize(res.getWinner());
-        if (pickWinner.isEmpty() || resWinner.isEmpty()) return 0;
-        if (!pickWinner.equals(resWinner)) return 0;
-
-        int pts = PTS_WINNER;  // +1
+        pts += PTS_WINNER;
 
         // +3 si acertó los sets ganados
-        if (pick.getSetsWinner() != null && res.getSetsWinner() != null
-            && pick.getSetsWinner().equals(res.getSetsWinner())) {
+        if (pick.getSetsWinner() != null && pick.getSetsWinner().equals(res.getSetsWinner()))
             pts += PTS_SETS;
-        }
 
         // +10 si acertó el resultado exacto set a set
-        if (esResultadoExacto(pick, res)) {
+        if (esResultadoExacto(pick, res))
             pts += PTS_EXACT;
-        }
 
-        log.debug("[calcPickPoints] pick.matchId={} winner={} pts={}",
-            pick.getMatch() != null ? pick.getMatch().getId() : null, pick.getWinner(), pts);
         return pts;
     }
 
-    /**
-     * FIX BUG 2 + 3: trata 0 (no cargado) igual que null (no jugado).
-     * Antes: si el admin no cargaba sets 3-5, se guardaban como 0 y
-     * ambosNull(null, 0) era false, así que nunca se consideraba "exacto".
-     * Ahora: cualquier set que sea null O 0 se considera "no jugado" y
-     * solo se exige que el pick también lo tenga vacío (null).
-     */
+    /** Compara los sets individuales del pick con el resultado real */
     private boolean esResultadoExacto(Pick pick, MatchResult res) {
-        // Necesita al menos el set 1 con valor real
-        if (!esSetJugado(pick.getSet1W()) || !esSetJugado(res.getSet1W())) return false;
+        // Necesita al menos el set 1
+        if (pick.getSet1W() == null || res.getSet1W() == null) return false;
 
-        boolean s1 = eqSet(pick.getSet1W(), res.getSet1W())
-                  && eqSet(pick.getSet1L(), res.getSet1L());
-        boolean s2 = ambosNoJugados(pick.getSet2W(), res.getSet2W())
-                  || (eqSet(pick.getSet2W(), res.getSet2W())
-                   && eqSet(pick.getSet2L(), res.getSet2L()));
-        boolean s3 = ambosNoJugados(pick.getSet3W(), res.getSet3W())
-                  || (eqSet(pick.getSet3W(), res.getSet3W())
-                   && eqSet(pick.getSet3L(), res.getSet3L()));
-        boolean s4 = ambosNoJugados(pick.getSet4W(), res.getSet4W())
-                  || (eqSet(pick.getSet4W(), res.getSet4W())
-                   && eqSet(pick.getSet4L(), res.getSet4L()));
-        boolean s5 = ambosNoJugados(pick.getSet5W(), res.getSet5W())
-                  || (eqSet(pick.getSet5W(), res.getSet5W())
-                   && eqSet(pick.getSet5L(), res.getSet5L()));
+        boolean s1 = eq(pick.getSet1W(), res.getSet1W()) && eq(pick.getSet1L(), res.getSet1L());
+        boolean s2 = eq(pick.getSet2W(), res.getSet2W()) && eq(pick.getSet2L(), res.getSet2L());
+
+        // Set 3-5: si ambos son null se considera correcto (partido no llegó a ese set)
+        boolean s3 = ambosNull(pick.getSet3W(), res.getSet3W())
+            || (eq(pick.getSet3W(), res.getSet3W()) && eq(pick.getSet3L(), res.getSet3L()));
+        boolean s4 = ambosNull(pick.getSet4W(), res.getSet4W())
+            || (eq(pick.getSet4W(), res.getSet4W()) && eq(pick.getSet4L(), res.getSet4L()));
+        boolean s5 = ambosNull(pick.getSet5W(), res.getSet5W())
+            || (eq(pick.getSet5W(), res.getSet5W()) && eq(pick.getSet5L(), res.getSet5L()));
 
         return s1 && s2 && s3 && s4 && s5;
     }
 
-    /** Un set se considera "jugado" si no es null y no es 0 (o sea, tiene games reales). */
-    private boolean esSetJugado(Integer i) { return i != null && i > 0; }
+    private boolean eq(Integer a, Integer b) { return a != null && a.equals(b); }
+    private boolean ambosNull(Integer a, Integer b) { return a == null && b == null; }
 
-    /** Compara dos valores de set: solo da true si ambos son jugados y son iguales. */
-    private boolean eqSet(Integer a, Integer b) {
-        if (!esSetJugado(a) || !esSetJugado(b)) return false;
-        return a.equals(b);
-    }
-
-    /** True si AMBOS son "no jugados" (null o 0). Esto hace que un set no jugado
-     *  en el resultado se considere correcto si el pick tampoco lo cargó. */
-    private boolean ambosNoJugados(Integer a, Integer b) {
-        return !esSetJugado(a) && !esSetJugado(b);
-    }
-
-    private String normalize(String s) {
-        return s == null ? "" : s.trim().toLowerCase();
-    }
-
-    /**
-     * FIX BUG 1: ahora suma TODOS los picks del usuario (no solo los de hoy).
-     * La tabla de posiciones es acumulada por todo el torneo, no diaria.
-     */
+    /** Puntos diarios totales de un usuario */
     public int calcDailyPoints(User user) {
         int pts = 0;
-        List<Pick> picks = pickRepo.findByUserId(user.getId());
-        log.debug("[calcDailyPoints] user={} picks totales={}", user.getEmail(), picks.size());
+        List<Pick> picks = pickRepo.findTodayPicksByUserId(user.getId());
         for (Pick pick : picks) {
             Optional<MatchResult> optRes = resultRepo.findByMatchId(pick.getMatch().getId());
             if (optRes.isEmpty()) continue;
             pts += calcPickPoints(pick, optRes.get());
         }
-        log.debug("[calcDailyPoints] user={} pts acumulados={}", user.getEmail(), pts);
         return pts;
     }
 
@@ -153,13 +108,12 @@ public class ScoreService {
         List<User> users = userRepo.findAll();
         LocalDate today = LocalDate.now();
 
-        log.info("[buildLeaderboard] calculando para {} usuarios", users.size());
-
         List<LeaderboardEntryDto> entries = users.stream().map(u -> {
             int daily      = calcDailyPoints(u);
             int tournament = calcTournamentPoints(u);
             boolean corrUsed = corrRepo.existsByUserIdAndUsedDate(u.getId(), today);
             return LeaderboardEntryDto.builder()
+                .userId(u.getId())
                 .name(u.getName())
                 .email(u.getEmail())
                 .totalPoints(daily + tournament)
@@ -171,12 +125,6 @@ public class ScoreService {
 
         entries.sort(Comparator.comparingInt(LeaderboardEntryDto::getTotalPoints).reversed());
         for (int i = 0; i < entries.size(); i++) entries.get(i).setRank(i + 1);
-
-        log.info("[buildLeaderboard] top 3: {}",
-            entries.stream().limit(3)
-                .map(e -> e.getName() + "=" + e.getTotalPoints())
-                .collect(Collectors.joining(", ")));
-
         return entries;
     }
 

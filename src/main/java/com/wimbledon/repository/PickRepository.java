@@ -10,4 +10,5 @@ public interface PickRepository extends JpaRepository<Pick, Long> {
     List<Pick> findByMatchId(Long matchId);
     @Query("SELECT p FROM Pick p WHERE p.user.id = :userId AND p.match.matchDate = CURRENT_DATE")
     List<Pick> findTodayPicksByUserId(Long userId);
+    Optional<Pick> findByUserIdAndMatchId(Long id, Long id2);
 }

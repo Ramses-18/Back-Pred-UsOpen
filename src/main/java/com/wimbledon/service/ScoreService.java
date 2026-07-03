@@ -33,14 +33,35 @@ public class ScoreService {
 
         pts += PTS_WINNER;
 
-        // FIX BUG 4: +3 solo si coinciden AMBOS setsWinner y setsLoser
-        // Pick: Alcaraz 3-1, Real: Alcaraz 3-1 → +3
-        // Pick: Alcaraz 3-1, Real: Alcaraz 3-2 → no suma (setsLoser distinto)
-        // Pick: Alcaraz 3-1, Real: Alcaraz 3-0 → no suma (setsLoser distinto)
-        boolean setsWinnerOk = pick.getSetsWinner() != null && res.getSetsWinner() != null
-            && pick.getSetsWinner().equals(res.getSetsWinner());
-        boolean setsLoserOk = pick.getSetsLoser() != null && res.getSetsLoser() != null
-            && pick.getSetsLoser().equals(res.getSetsLoser());
+        // +3 si acertó resultado en sets (setsWinner y opcionalmente setsLoser)
+        // Lógica flexible:
+        // 1. Si ambos tienen setsLoser cargado → comparar directo
+        // 2. Si solo uno tiene setsLoser → el otro se infiere y se valida
+        // 3. Si ninguno tiene setsLoser → +3 solo por coincidir setsWinner
+        Integer realSetsWinner = res.getSetsWinner();
+        Integer realSetsLoser  = res.getSetsLoser();
+        Integer pickSetsWinner = pick.getSetsWinner();
+        Integer pickSetsLoser  = pick.getSetsLoser();
+
+        boolean setsWinnerOk = pickSetsWinner != null && realSetsWinner != null
+            && pickSetsWinner.equals(realSetsWinner);
+
+        boolean setsLoserOk;
+        if (pickSetsLoser != null && realSetsLoser != null) {
+            // Ambos cargados → comparar directo
+            setsLoserOk = pickSetsLoser.equals(realSetsLoser);
+        } else if (pickSetsLoser != null && realSetsLoser == null && realSetsWinner != null) {
+            // Pick tiene setsLoser pero resultado no → inferir validez
+            setsLoserOk = esSetsLoserValido(pickSetsLoser, realSetsWinner);
+        } else if (pickSetsLoser == null && realSetsLoser != null && pickSetsWinner != null) {
+            // Resultado tiene setsLoser pero pick no → inferir validez
+            setsLoserOk = esSetsLoserValido(realSetsLoser, pickSetsWinner);
+        } else if (pickSetsLoser == null && realSetsLoser == null) {
+            // Ninguno tiene setsLoser → aceptar si setsWinner coincide
+            setsLoserOk = true;
+        } else {
+            setsLoserOk = false;
+        }
 
         if (setsWinnerOk && setsLoserOk) {
             pts += PTS_SETS;
@@ -51,6 +72,18 @@ public class ScoreService {
             pts += PTS_EXACT;
 
         return pts;
+    }
+
+    /**
+     * Valida si el setsLoser del pick es consistente con el setsWinner del resultado:
+     * - setsWinner=3 → setsLoser ∈ {0, 1, 2} (best of 5)
+     * - setsWinner=2 → setsLoser ∈ {0, 1}    (best of 3)
+     */
+    private boolean esSetsLoserValido(Integer setsLoser, Integer setsWinner) {
+        if (setsLoser == null || setsWinner == null) return false;
+        if (setsWinner == 3) return setsLoser >= 0 && setsLoser <= 2;
+        if (setsWinner == 2) return setsLoser >= 0 && setsLoser <= 1;
+        return false;
     }
 
     /** Compara los sets individuales del pick con el resultado real */

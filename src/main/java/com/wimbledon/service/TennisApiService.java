@@ -35,10 +35,9 @@ public class TennisApiService {
 
     private final MatchRepository matchRepo;
     private final MatchAdminService matchAdminService;
+    private final CourtQueueService courtQueueService;
     private final RestTemplate restTemplate;
 
-    // A las 6:00 AM Londres — trae TODO el schedule del día y arma la cola por
-    // cancha
     @Scheduled(cron = "0 0 6 * * *", zone = "Europe/London")
     public void syncDailySchedule() {
         LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
@@ -151,7 +150,7 @@ public class TennisApiService {
                         log.info("✓ Resultado final: {} vs {} | {} | ganador: {}", p1, p2, score, dto.getWinner());
                     }
 
-                    recalcularEstimadosEnCancha(m.getCourt(), m.getMatchDate());
+                    courtQueueService.recalcularEstimadosEnCancha(m.getCourt(), m.getMatchDate());
                 }
             } catch (Exception e) {
                 log.error("Error sync match {}: {}", m.getApiEventId(), e.getMessage());
@@ -159,13 +158,6 @@ public class TennisApiService {
         }
     }
 
-    /**
-     * Convierte el mapa de scores de API-Sports:
-     * {"set1":{"player1":6,"player2":4}, "set2":{"player1":3,"player2":6},
-     * "set3":{"player1":7,"player2":5}}
-     * al formato que tu parsearResultadoLive ya entiende:
-     * "6-4,3-6,7-5"
-     */
     private String buildScoreString(Map scores) {
         if (scores == null)
             return "";
@@ -186,12 +178,6 @@ public class TennisApiService {
         return sb.toString();
     }
 
-    /**
-     * Determina quién ganó a partir de los sets.
-     * Cuenta sets ganados por cada player y devuelve "1,0" o "0,1".
-     * En caso de WO o ABD donde no haya sets jugados, default "1,0"
-     * (tu parseResultadoLive ya maneja el caso de winner basándose en indicator).
-     */
     private String buildIndicator(Map scores) {
         if (scores == null)
             return "1,0";

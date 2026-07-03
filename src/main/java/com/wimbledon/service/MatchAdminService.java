@@ -17,7 +17,7 @@ public class MatchAdminService {
     private final MatchRepository       matchRepo;
     private final MatchResultRepository resultRepo;
     @Lazy
-    private final TennisApiService      tennisApiService;   // ← rompe el ciclo
+    private final CourtQueueService     courtQueueService;   // para evitar ciclo de dependencias con TennisApiService
 
 
     public Match createMatch(MatchCreateRequest req) {
@@ -77,14 +77,13 @@ public class MatchAdminService {
         res.setEnteredAt(LocalDateTime.now());
         resultRepo.save(res);
 
-        // NUEVO: marcar el match como FINISHED y propagar a la cola
+
         if (!"FINISHED".equals(match.getStatus())) {
             match.setStatus("FINISHED");
             match.setActualEndTime(LocalDateTime.now());
             matchRepo.save(match);
-            // El recálculo de estimados de los siguientes lo hace TennisApiService
-            // cuando detecta el cambio de status, pero también podemos dispararlo acá:
-            // tennisApiService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
+            // Ya no hay ciclo: CourtQueueService no depende de nadie más arriba
+            courtQueueService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
         }
 
         return dto;
@@ -123,14 +122,9 @@ public class MatchAdminService {
     }
 
     public void deleteMatch(Long id) {
-        // Antes de borrar, re-cadenar el follows_match_id de quien lo seguía
         Match m = matchRepo.findById(id).orElse(null);
         if (m != null) {
-            Match next = matchRepo.findByFollowsMatchId(id);
-            if (next != null) {
-                next.setFollowsMatchId(m.getFollowsMatchId()); // saltea al borrado
-                matchRepo.save(next);
-            }
+            courtQueueService.recadenarAlBorrar(id, m.getCourt(), m.getMatchDate());
         }
         matchRepo.deleteById(id);
     }

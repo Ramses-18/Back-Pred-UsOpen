@@ -38,7 +38,7 @@ public class TennisApiService {
      */
     @Scheduled(fixedDelay = 120_000)
     public void syncLiveEvents() {
-        LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
+        LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         String url = baseUrl + "/tennis/v2/extend/api/events/live";
 
         HttpHeaders headers = apiHeaders();

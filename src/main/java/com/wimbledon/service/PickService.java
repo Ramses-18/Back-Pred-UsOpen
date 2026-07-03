@@ -25,7 +25,7 @@ public class PickService {
 
     public List<MatchDto> getTodayMatches(String email) {
         User user = findUser(email);
-        LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
+        LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }

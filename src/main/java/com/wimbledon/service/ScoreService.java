@@ -6,6 +6,7 @@ import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -166,7 +167,7 @@ public class ScoreService {
     /** Tabla de posiciones completa */
     public List<LeaderboardEntryDto> buildLeaderboard() {
         List<User> users = userRepo.findAll();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
 
         List<LeaderboardEntryDto> entries = users.stream().map(u -> {
             int daily      = calcDailyPoints(u);

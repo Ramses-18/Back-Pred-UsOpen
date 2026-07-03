@@ -69,14 +69,14 @@ public class ScoreService {
      */
     private int[] contarSets(MatchResult res) {
         int w = 0, l = 0;
-        int[][] sets = {
+        Integer[][] sets = {
             {res.getSet1W(), res.getSet1L()},
             {res.getSet2W(), res.getSet2L()},
             {res.getSet3W(), res.getSet3L()},
             {res.getSet4W(), res.getSet4L()},
             {res.getSet5W(), res.getSet5L()},
         };
-        for (int[] s : sets) {
+        for (Integer[] s : sets) {
             if (s[0] != null && s[1] != null && s[0] > 0 && s[1] >= 0) {
                 if (s[0] > s[1]) w++;
                 else if (s[1] > s[0]) l++;
@@ -88,14 +88,14 @@ public class ScoreService {
     /** Igual que contarSets pero para un Pick */
     private int[] contarSetsPick(Pick pick) {
         int w = 0, l = 0;
-        int[][] sets = {
+        Integer[][] sets = {
             {pick.getSet1W(), pick.getSet1L()},
             {pick.getSet2W(), pick.getSet2L()},
             {pick.getSet3W(), pick.getSet3L()},
             {pick.getSet4W(), pick.getSet4L()},
             {pick.getSet5W(), pick.getSet5L()},
         };
-        for (int[] s : sets) {
+        for (Integer[] s : sets) {
             if (s[0] != null && s[1] != null && s[0] > 0 && s[1] >= 0) {
                 if (s[0] > s[1]) w++;
                 else if (s[1] > s[0]) l++;

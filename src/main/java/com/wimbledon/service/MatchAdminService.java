@@ -4,6 +4,8 @@ import com.wimbledon.dto.*;
 import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
+
+import org.hibernate.validator.internal.util.stereotypes.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
@@ -14,6 +16,9 @@ public class MatchAdminService {
 
     private final MatchRepository       matchRepo;
     private final MatchResultRepository resultRepo;
+    @Lazy
+    private final TennisApiService      tennisApiService;   // ← rompe el ciclo
+
 
     public Match createMatch(MatchCreateRequest req) {
         // Calcular orderInCourt automáticamente: 1 + max(order) en esa cancha+fecha

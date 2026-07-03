@@ -28,7 +28,6 @@ app:
   tennis-api:
     key: ${TENNIS_API_KEY}
     host: tennis-api-atp-wta-itf.p.rapidapi.com
-    base-url: ${TENNIS_API_BASE_URL:https://api-sports.io/tennis}
 
 logging:
   level:

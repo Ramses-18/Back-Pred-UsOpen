@@ -4,6 +4,7 @@ import com.wimbledon.dto.*;
 import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
@@ -12,75 +13,83 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PickService {
 
-    private final MatchRepository matchRepo;
-    private final MatchResultRepository resultRepo;
-    private final PickRepository pickRepo;
+    private final MatchRepository          matchRepo;
+    private final MatchResultRepository    resultRepo;
+    private final PickRepository           pickRepo;
     private final DailyCorrectionRepository corrRepo;
-    private final UserRepository userRepo;
-    private final ScoreService scoreService;
+    private final UserRepository           userRepo;
+    private final ScoreService             scoreService;
 
     public List<MatchDto> getTodayMatches(String email) {
         User user = findUser(email);
-        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(LocalDate.now());
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
+        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
     private MatchDto toDto(Match m, User user) {
         Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
-        Optional<Pick> optPick = pickRepo.findByUserIdAndMatchId(user.getId(), m.getId());
+        Optional<Pick>        optPick = pickRepo.findByUserIdAndMatchId(user.getId(), m.getId());
 
         MatchResultDto resDto = optRes.map(r -> MatchResultDto.builder()
-                .winner(r.getWinner())
-                .setsWinner(r.getSetsWinner())
-                .setsLoser(r.getSetsLoser())
-                .gameResult(r.getGameResult())
-                .set1W(r.getSet1W()).set1L(r.getSet1L())
-                .set2W(r.getSet2W()).set2L(r.getSet2L())
-                .set3W(r.getSet3W()).set3L(r.getSet3L())
-                .set4W(r.getSet4W()).set4L(r.getSet4L())
-                .set5W(r.getSet5W()).set5L(r.getSet5L())
-                .build()).orElse(null);
+            .winner(r.getWinner())
+            .setsWinner(r.getSetsWinner())
+            .setsLoser(r.getSetsLoser())
+            .gameResult(r.getGameResult())
+            .set1W(r.getSet1W()).set1L(r.getSet1L())
+            .set2W(r.getSet2W()).set2L(r.getSet2L())
+            .set3W(r.getSet3W()).set3L(r.getSet3L())
+            .set4W(r.getSet4W()).set4L(r.getSet4L())
+            .set5W(r.getSet5W()).set5L(r.getSet5L())
+            .build()
+        ).orElse(null);
 
         PickDto pickDto = null;
         if (optPick.isPresent()) {
             Pick p = optPick.get();
             int pts = optRes.isPresent() ? scoreService.calcPickPoints(p, optRes.get()) : 0;
             pickDto = PickDto.builder()
-                    .matchId(m.getId())
-                    .winner(p.getWinner())
-                    .setsWinner(safeInt(p.getSetsWinner()))
-                    .setsLoser(safeInt(p.getSetsLoser()))
-                    .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
-                    .pointsEarned(pts)
-                    .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
-                    .set2W(safeInt(p.getSet2W())).set2L(safeInt(p.getSet2L()))
-                    .set3W(safeInt(p.getSet3W())).set3L(safeInt(p.getSet3L()))
-                    .set4W(safeInt(p.getSet4W())).set4L(safeInt(p.getSet4L()))
-                    .set5W(safeInt(p.getSet5W())).set5L(safeInt(p.getSet5L()))
-                    .build();
+            .matchId(m.getId())
+            .winner(p.getWinner())
+            .setsWinner(p.getSetsWinner())
+            .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
+            .pointsEarned(pts)
+            .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
+            .set2W(safeInt(p.getSet2W())).set2L(safeInt(p.getSet2L()))
+            .set3W(safeInt(p.getSet3W())).set3L(safeInt(p.getSet3L()))
+            .set4W(safeInt(p.getSet4W())).set4L(safeInt(p.getSet4L()))
+            .set5W(safeInt(p.getSet5W())).set5L(safeInt(p.getSet5L()))
+            .build();
         }
 
         return MatchDto.builder()
-                .id(m.getId())
-                .matchDate(m.getMatchDate())
-                .matchTime(m.getMatchTime())
-                .court(m.getCourt())
-                .player1(m.getPlayer1())
-                .player2(m.getPlayer2())
-                .round(m.getRound())
-                .result(resDto)
-                .myPick(pickDto)
-                .deadlinePassed(isDeadlinePassed(m))
-                .build();
+            .id(m.getId())
+            .matchDate(m.getMatchDate())
+            .matchTime(m.getMatchTime())
+            .court(m.getCourt())
+            .player1(m.getPlayer1())
+            .player2(m.getPlayer2())
+            .round(m.getRound())
+            .orderInCourt(m.getOrderInCourt())
+            .followsMatchId(m.getFollowsMatchId())
+            .status(m.getStatus())
+            .actualStartTime(m.getActualStartTime())
+            .actualEndTime(m.getActualEndTime())
+            .estimatedStartTime(computeEstimatedStart(m))
+            .result(resDto)
+            .myPick(pickDto)
+            .deadlinePassed(isDeadlinePassed(m))
+            .build();
     }
 
     @Transactional
     public PickDto submitPick(Long matchId, PickRequest req, String email) {
-        User user = findUser(email);
+        User  user  = findUser(email);
         Match match = matchRepo.findById(matchId)
-                .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
 
         boolean deadlinePassed = isDeadlinePassed(match);
         Optional<Pick> existing = pickRepo.findByUserIdAndMatchId(user.getId(), matchId);
@@ -98,7 +107,7 @@ public class PickService {
             throw new IllegalStateException("El plazo de pronóstico ya cerró.");
 
         if (!req.getWinner().equalsIgnoreCase(match.getPlayer1())
-                && !req.getWinner().equalsIgnoreCase(match.getPlayer2()))
+         && !req.getWinner().equalsIgnoreCase(match.getPlayer2()))
             throw new IllegalArgumentException("El ganador debe ser uno de los dos jugadores.");
 
         Pick pick = existing.orElse(Pick.builder().user(user).match(match).build());
@@ -122,73 +131,65 @@ public class PickService {
         pickRepo.save(pick);
 
         return PickDto.builder()
-                .matchId(matchId)
-                .winner(pick.getWinner())
-                .setsWinner(pick.getSetsWinner())
-                .isCorrection(pick.getIsCorrection())
-                .set1W(pick.getSet1W()).set1L(pick.getSet1L())
-                .set2W(pick.getSet2W()).set2L(pick.getSet2L())
-                .set3W(pick.getSet3W()).set3L(pick.getSet3L())
-                .set4W(pick.getSet4W()).set4L(pick.getSet4L())
-                .set5W(pick.getSet5W()).set5L(pick.getSet5L())
-                .pointsEarned(0)
-                .build();
+            .matchId(matchId)
+            .winner(pick.getWinner())
+            .setsWinner(pick.getSetsWinner())
+            .isCorrection(pick.getIsCorrection())
+            .set1W(safeInt(pick.getSet1W())).set1L(safeInt(pick.getSet1L()))
+            .set2W(safeInt(pick.getSet2W())).set2L(safeInt(pick.getSet2L()))
+            .set3W(safeInt(pick.getSet3W())).set3L(safeInt(pick.getSet3L()))
+            .set4W(safeInt(pick.getSet4W())).set4L(safeInt(pick.getSet4L()))
+            .set5W(safeInt(pick.getSet5W())).set5L(safeInt(pick.getSet5L()))
+            .pointsEarned(0)
+            .build();
     }
 
-    // Cierre 5 minutos antes de cada partido individualmente
+    /**
+     * FIX: deadline dinámico basado en status real del match.
+     * - Si el partido ya arrancó o terminó → SIEMPRE cerró.
+     * - Si tiene hora tentativa → deadline = hora - 5 min.
+     * - Si sigue a otro partido → deadline = 5 min después de que termine el padre.
+     * - Si no tiene hora y no sigue a nadie → abierto (no debería pasar).
+     */
     private boolean isDeadlinePassed(Match match) {
-        // 1. Si el partido ya arrancó o terminó, SIEMPRE cerró
         if (!"SCHEDULED".equals(match.getStatus())) {
             return true;
         }
 
-        // 2. Si tiene hora tentativa (not-before), deadline = 5 min antes
         if (match.getMatchTime() != null && match.getMatchDate() != null) {
             LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
             return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
         }
 
-        // 3. Si no tiene hora pero depende de otro partido (follows_match_id),
-        // el deadline = 5 min antes del estimated start del partido "padre"
         if (match.getFollowsMatchId() != null) {
             Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
             if (parent != null && parent.getActualEndTime() != null) {
-                // El Partido ya terminó → este partido podría arrancar en cualquier momento
-                // Damos 5 min de gracia desde que terminó el padre
                 return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
             }
-            // El padre no terminó → todavía se puede pronosticar
             return false;
         }
 
-        // 4. Sin hora y sin padre: caso raro (partido flotante), dejamos abierto
         return false;
     }
 
-    private User findUser(String email) {
-        return userRepo.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
-    }
-
     private LocalTime computeEstimatedStart(Match m) {
-        // Si ya arrancó, la hora real
-        if (m.getActualStartTime() != null)
-            return m.getActualStartTime().toLocalTime();
-        // Si tiene hora tentativa, esa
-        if (m.getMatchTime() != null)
-            return m.getMatchTime();
-        // Si sigue a otro partido: hora fin del padre + buffer 10 min (cambio de lado)
+        if (m.getActualStartTime() != null) return m.getActualStartTime().toLocalTime();
+        if (m.getMatchTime() != null) return m.getMatchTime();
         if (m.getFollowsMatchId() != null) {
             Match parent = matchRepo.findById(m.getFollowsMatchId()).orElse(null);
             if (parent != null && parent.getActualEndTime() != null) {
                 return parent.getActualEndTime().plusMinutes(10).toLocalTime();
             }
-            // Padre no terminó: estimar con la hora tentativa del padre + 2h promedio
             if (parent != null && parent.getMatchTime() != null) {
                 return parent.getMatchTime().plusHours(2);
             }
         }
-        return null; // desconocido
+        return null;
+    }
+
+    private User findUser(String email) {
+        return userRepo.findByEmail(email)
+            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 
     private Integer safeInt(Integer value) {

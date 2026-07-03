@@ -9,7 +9,7 @@ import java.time.LocalTime;
 public class MatchDto {
     private Long id;
     private LocalDate matchDate;
-    private LocalTime matchTime;       // ahora puede ser null
+    private LocalTime matchTime;
     private String court;
     private String player1;
     private String player2;
@@ -20,8 +20,6 @@ public class MatchDto {
     private String status;             // SCHEDULED | IN_PLAY | FINISHED | ...
     private LocalDateTime actualStartTime;
     private LocalDateTime actualEndTime;
-
-    // Hora estimada de inicio calculada por el back
     private LocalTime estimatedStartTime;
 
     private MatchResultDto result;

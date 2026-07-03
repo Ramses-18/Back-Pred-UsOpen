@@ -11,7 +11,8 @@ import java.time.LocalTime;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Match {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "match_date", nullable = false)
@@ -21,10 +22,11 @@ public class Match {
     private LocalTime matchTime;
 
     @Column(nullable = false, length = 60)
-    private String court;            // "Centre Court", "Court 1", etc.
+    private String court;
 
     @Column(nullable = false, length = 100)
     private String player1;
+
     @Column(nullable = false, length = 100)
     private String player2;
 
@@ -32,23 +34,24 @@ public class Match {
     private String round;
 
     @Column(name = "order_in_court", nullable = false)
-    private Integer orderInCourt;          // 1°, 2°, 3° partido de esa cancha
+    @Builder.Default
+    private Integer orderInCourt = 1;
 
     @Column(name = "follows_match_id")
-    private Long followsMatchId;           // FK al partido previo en la misma cancha (null si es el 1°)
+    private Long followsMatchId;
 
-    @Column(name = "status", nullable = false, length = 10)
+    @Column(name = "status", nullable = false, length = 12)
     @Builder.Default
-    private String status = "SCHEDULED";   // SCHEDULED | IN_PLAY | FINISHED | WALKOVER | SUSPENDED | RETIRED | ABANDONED
+    private String status = "SCHEDULED";
 
     @Column(name = "actual_start_time")
-    private LocalDateTime actualStartTime; 
+    private LocalDateTime actualStartTime;
 
     @Column(name = "actual_end_time")
-    private LocalDateTime actualEndTime;   // se setea cuando status pasa a FINISHED/ABANDONED/...
+    private LocalDateTime actualEndTime;
 
-    @Column(name = "api_event_id", length = 40, unique = true)
-    private String apiEventId;             // id del fixture en API-Sports (para matchear en syncs)
+    @Column(name = "api_event_id", length = 40)
+    private String apiEventId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default

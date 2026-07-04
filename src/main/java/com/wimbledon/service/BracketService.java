@@ -129,18 +129,26 @@ public class BracketService {
         BracketMatch m = bracketRepo.findById(matchId)
             .orElseThrow(() -> new IllegalArgumentException("Partido del bracket no encontrado."));
 
-        // Actualizar campos (solo los que vienen no null)
-        if (dto.getPlayer1() != null) m.setPlayer1(dto.getPlayer1().trim().isEmpty() ? null : dto.getPlayer1().trim());
-        if (dto.getPlayer2() != null) m.setPlayer2(dto.getPlayer2().trim().isEmpty() ? null : dto.getPlayer2().trim());
-        if (dto.getWinner() != null) {
+        // Actualizar jugadores (siempre, null limpia)
+        m.setPlayer1(dto.getPlayer1() != null ? (dto.getPlayer1().trim().isEmpty() ? null : dto.getPlayer1().trim()) : m.getPlayer1());
+        m.setPlayer2(dto.getPlayer2() != null ? (dto.getPlayer2().trim().isEmpty() ? null : dto.getPlayer2().trim()) : m.getPlayer2());
+
+        // Actualizar resultado: si viene winner no-null, usarlo; si viene status=SCHEDULED, limpiar
+        if (dto.getStatus() != null && "SCHEDULED".equals(dto.getStatus())) {
+            m.setWinner(null);
+            m.setScoreStr(null);
+            m.setSetsWinner(null);
+            m.setSetsLoser(null);
+            m.setStatus("SCHEDULED");
+        } else if (dto.getWinner() != null) {
             String winner = dto.getWinner().trim().isEmpty() ? null : dto.getWinner().trim();
             m.setWinner(winner);
             m.setStatus(winner == null ? "SCHEDULED" : "FINISHED");
         }
-        if (dto.getScoreStr() != null) m.setScoreStr(dto.getScoreStr());
-        if (dto.getSetsWinner() != null) m.setSetsWinner(dto.getSetsWinner());
-        if (dto.getSetsLoser() != null) m.setSetsLoser(dto.getSetsLoser());
-        if (dto.getStatus() != null) m.setStatus(dto.getStatus());
+
+        if (dto.getScoreStr() != null && m.getWinner() != null) m.setScoreStr(dto.getScoreStr());
+        if (dto.getSetsWinner() != null && m.getWinner() != null) m.setSetsWinner(dto.getSetsWinner());
+        if (dto.getSetsLoser() != null && m.getWinner() != null) m.setSetsLoser(dto.getSetsLoser());
 
         m.setUpdatedAt(LocalDateTime.now());
         bracketRepo.save(m);

@@ -41,12 +41,11 @@ public class AdminController {
         return ResponseEntity.ok(facade.saveResult(req));
     }
 
-    /** Trae partidos en vivo de la API y los inserta en DB si no existen.
-     *  NO cambia status ni guarda resultados — eso lo hace el admin manualmente. */
-    @PostMapping("/sync/live")
-    public ResponseEntity<Map<String, String>> syncLive() {
-        tennisApiService.syncLiveEvents();
-        return ResponseEntity.ok(Map.of("status", "Partidos en vivo sincronizados"));
+    /** Sincronización manual (ya no se usa automáticamente cada 2 min). */
+    @PostMapping("/sync/tomorrow")
+    public ResponseEntity<Map<String, String>> syncTomorrow() {
+        tennisApiService.syncTomorrowMatches();
+        return ResponseEntity.ok(Map.of("status", "Partidos de mañana sincronizados"));
     }
 
     /** Cambio manual de status (admin inicia/suspende/finaliza partido). */
@@ -58,13 +57,22 @@ public class AdminController {
         return ResponseEntity.ok(matchAdminService.updateStatus(matchId, newStatus));
     }
 
-    /** NUEVO — Forzar cierre de pronóstico + pasar a IN_PLAY en un solo paso. */
+    /**
+     * FIX Req 3: Solo cerrar pronóstico sin cambiar status del partido.
+     * El admin cierra los pronósticos cuando quiere; el partido sigue SCHEDULED hasta que decida iniciarlo.
+     */
+    @PostMapping("/matches/{matchId}/force-deadline")
+    public ResponseEntity<Match> forceDeadline(@PathVariable Long matchId) {
+        return ResponseEntity.ok(matchAdminService.forceDeadline(matchId));
+    }
+
+    /** Cerrar pronóstico + pasar a IN_PLAY en un solo paso. */
     @PostMapping("/matches/{matchId}/force-start")
     public ResponseEntity<Match> forceDeadlineAndStart(@PathVariable Long matchId) {
         return ResponseEntity.ok(matchAdminService.forceDeadlineAndStart(matchId));
     }
 
-    /** NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED). */
+    /** Cargar score parcial durante el partido (sin winner, sin FINISHED). */
     @PatchMapping("/matches/{matchId}/live-score")
     public ResponseEntity<MatchResultDto> updateLiveScore(
             @PathVariable Long matchId,

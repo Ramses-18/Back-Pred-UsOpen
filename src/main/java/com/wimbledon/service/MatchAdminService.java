@@ -98,8 +98,29 @@ public class MatchAdminService {
     }
 
     /**
-     * NUEVO — Forzar cierre de pronóstico + pasar a IN_PLAY en un solo paso.
-     * Como pediste: el admin cierra y el partido arranca.
+     * FIX Req 3: Solo cierra el pronóstico (deadlineForced = true).
+     * NO cambia el status del partido — el admin decide cuándo iniciar el partido por separado.
+     */
+    @Transactional
+    public Match forceDeadline(Long matchId) {
+        log.info("[forceDeadline] matchId={}", matchId);
+
+        Match m = matchRepo.findById(matchId)
+            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+
+        if (Boolean.TRUE.equals(m.getDeadlineForced())) {
+            throw new IllegalStateException("El pronóstico ya está cerrado.");
+        }
+
+        m.setDeadlineForced(true);
+        matchRepo.save(m);
+
+        log.info("[forceDeadline] ✓ pronóstico cerrado para match {}", matchId);
+        return m;
+    }
+
+    /**
+     * Cerrar pronóstico + pasar a IN_PLAY en un solo paso (comportamiento anterior).
      */
     @Transactional
     public Match forceDeadlineAndStart(Long matchId) {
@@ -125,8 +146,7 @@ public class MatchAdminService {
     }
 
     /**
-     * NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED).
-     * El admin actualiza games en vivo; los usuarios lo ven en la card.
+     * Cargar score parcial durante el partido (sin winner, sin FINISHED).
      */
     @Transactional
     public MatchResultDto updateLiveScore(Long matchId, MatchResultDto dto) {
@@ -145,7 +165,6 @@ public class MatchAdminService {
         MatchResult res = resultRepo.findByMatchId(matchId)
             .orElse(MatchResult.builder().match(match).build());
 
-        // Solo actualizamos los sets que vienen en el dto (los null no se tocan)
         if (dto.getSet1W() != null) res.setSet1W(dto.getSet1W());
         if (dto.getSet1L() != null) res.setSet1L(dto.getSet1L());
         if (dto.getSet2W() != null) res.setSet2W(dto.getSet2W());
@@ -157,7 +176,6 @@ public class MatchAdminService {
         if (dto.getSet5W() != null) res.setSet5W(dto.getSet5W());
         if (dto.getSet5L() != null) res.setSet5L(dto.getSet5L());
 
-        // No tocamos winner ni setsWinner — eso se carga al finalizar
         if (dto.getGameResult() != null) res.setGameResult(dto.getGameResult());
 
         res.setEnteredAt(LocalDateTime.now());

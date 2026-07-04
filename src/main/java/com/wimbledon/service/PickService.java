@@ -95,7 +95,7 @@ public class PickService {
         boolean deadlinePassed = isDeadlinePassed(match);
         Optional<Pick> existing = pickRepo.findByUserIdAndMatchId(user.getId(), matchId);
 
-        if (existing.isPresent() && deadlinePassed) {
+        if (deadlinePassed) {
             if (!req.isUseCorrection())
                 throw new IllegalStateException("El plazo de pronóstico ya cerró.");
             boolean alreadyUsed = corrRepo.existsByUserIdAndUsedDate(user.getId(), LocalDate.now());
@@ -103,9 +103,6 @@ public class PickService {
                 throw new IllegalStateException("Ya usaste tu corrección del día.");
             corrRepo.save(DailyCorrection.builder().user(user).usedDate(LocalDate.now()).build());
         }
-
-        if (!existing.isPresent() && deadlinePassed && !req.isUseCorrection())
-            throw new IllegalStateException("El plazo de pronóstico ya cerró.");
 
         if (!req.getWinner().equalsIgnoreCase(match.getPlayer1())
          && !req.getWinner().equalsIgnoreCase(match.getPlayer2()))
@@ -146,36 +143,12 @@ public class PickService {
     }
 
     /**
-     * FIX: deadline dinámico basado en status real del match.
-     * - Si el partido ya arrancó o terminó → SIEMPRE cerró.
-     * - Si tiene hora tentativa → deadline = hora - 5 min.
-     * - Si sigue a otro partido → deadline = 5 min después de que termine el padre.
-     * - Si no tiene hora y no sigue a nadie → abierto (no debería pasar).
+     * FIX Req 3: Deadline 100% manual por el admin.
+     * Solo se cierra cuando el admin explicitamente fuerza el cierre (deadlineForced = true).
+     * Ya NO se cierra automaticamente por horario ni por cambio de status.
      */
     private boolean isDeadlinePassed(Match match) {
-        if (!"SCHEDULED".equals(match.getStatus())) {
-            return true;
-        }
-
-        // NUEVO — si el admin forzó el cierre, siempre está cerrado
-        if (Boolean.TRUE.equals(match.getDeadlineForced())) {
-            return true;
-        }
-
-        if (match.getMatchTime() != null && match.getMatchDate() != null) {
-            LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
-            return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
-        }
-
-        if (match.getFollowsMatchId() != null) {
-            Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
-            if (parent != null && parent.getActualEndTime() != null) {
-                return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
-            }
-            return false;
-        }
-
-        return false;
+        return Boolean.TRUE.equals(match.getDeadlineForced());
     }
 
     private LocalTime computeEstimatedStart(Match m) {

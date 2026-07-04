@@ -66,12 +66,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsSource() {
         CorsConfiguration cfg = new CorsConfiguration();
         //List<String> origins = Arrays.asList(allowedOriginsRaw.split(","));
-        List<String> origins = Arrays.asList(
-            "https://front-wimbledon-2dgb.vercel.app", 
-            "http://localhost:5173", 
+        cfg.setAllowedOriginPatterns(Arrays.asList(
+            "https://*.vercel.app",
+            "http://localhost:5173",
             "http://localhost:3000"
-        );
-        cfg.setAllowedOrigins(origins);
+        ));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);

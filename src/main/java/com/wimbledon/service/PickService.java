@@ -27,7 +27,33 @@ public class PickService {
         User user = findUser(email);
         LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
-        return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
+        return matches.stream().map(m -> toDtoSafe(m, user)).collect(Collectors.toList());
+    }
+
+    private MatchDto toDtoSafe(Match m, User user) {
+        try {
+            return toDto(m, user);
+        } catch (Exception e) {
+            log.error("[toDtoSafe] error en match {}: {}", m.getId(), e.getMessage(), e);
+            // Devolver el match sin pick ni resultado
+            return MatchDto.builder()
+                .id(m.getId())
+                .matchDate(m.getMatchDate())
+                .matchTime(m.getMatchTime())
+                .court(m.getCourt())
+                .player1(m.getPlayer1())
+                .player2(m.getPlayer2())
+                .round(m.getRound())
+                .orderInCourt(m.getOrderInCourt())
+                .followsMatchId(m.getFollowsMatchId())
+                .status(m.getStatus())
+                .actualStartTime(m.getActualStartTime())
+                .actualEndTime(m.getActualEndTime())
+                .estimatedStartTime(computeEstimatedStart(m))
+                .deadlineForced(Boolean.TRUE.equals(m.getDeadlineForced()))
+                .deadlinePassed(isDeadlinePassed(m))
+                .build();
+        }
     }
 
     private MatchDto toDto(Match m, User user) {
@@ -50,11 +76,20 @@ public class PickService {
         PickDto pickDto = null;
         if (optPick.isPresent()) {
             Pick p = optPick.get();
-            int pts = optRes.isPresent() ? scoreService.calcPickPoints(p, optRes.get()) : 0;
+            int pts = 0;
+            if (optRes.isPresent()) {
+                try {
+                    pts = scoreService.calcPickPoints(p, optRes.get());
+                } catch (Exception e) {
+                    log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage());
+                    pts = 0;
+                }
+            }
             pickDto = PickDto.builder()
             .matchId(m.getId())
             .winner(p.getWinner())
             .setsWinner(p.getSetsWinner())
+            .setsLoser(p.getSetsLoser())
             .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
             .pointsEarned(pts)
             .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
@@ -145,28 +180,17 @@ public class PickService {
             .build();
     }
 
-    /**
-     * FIX: deadline dinámico basado en status real del match.
-     * - Si el partido ya arrancó o terminó → SIEMPRE cerró.
-     * - Si tiene hora tentativa → deadline = hora - 5 min.
-     * - Si sigue a otro partido → deadline = 5 min después de que termine el padre.
-     * - Si no tiene hora y no sigue a nadie → abierto (no debería pasar).
-     */
     private boolean isDeadlinePassed(Match match) {
         if (!"SCHEDULED".equals(match.getStatus())) {
             return true;
         }
-
-        // NUEVO — si el admin forzó el cierre, siempre está cerrado
         if (Boolean.TRUE.equals(match.getDeadlineForced())) {
             return true;
         }
-
         if (match.getMatchTime() != null && match.getMatchDate() != null) {
             LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
             return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
         }
-
         if (match.getFollowsMatchId() != null) {
             Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
             if (parent != null && parent.getActualEndTime() != null) {
@@ -174,7 +198,6 @@ public class PickService {
             }
             return false;
         }
-
         return false;
     }
 
@@ -198,7 +221,7 @@ public class PickService {
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 
-    private Integer safeInt(Integer value) {
+    private int safeInt(Integer value) {
         return value != null ? value : 0;
     }
 }

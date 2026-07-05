@@ -5,9 +5,11 @@ import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -18,6 +20,8 @@ public class MatchAdminService {
     private final MatchRepository       matchRepo;
     private final MatchResultRepository resultRepo;
     private final CourtQueueService     courtQueueService;
+    private final PickRepository        pickRepo;
+    private final NotificationService   notificationService;
 
     public Match createMatch(MatchCreateRequest req) {
         Integer maxOrder = matchRepo.findMaxOrderInCourt(req.getMatchDate(), req.getCourt());
@@ -92,6 +96,10 @@ public class MatchAdminService {
             log.info("[saveResult] match {} marcado como FINISHED", matchId);
 
             courtQueueService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
+
+            // Notificar a los usuarios que hicieron pick
+            String winner = dto.getWinner() != null ? dto.getWinner() : "Resultado cargado";
+            sendMatchNotification(match, "Resultado: " + winner, match.getPlayer1() + " vs " + match.getPlayer2());
         }
 
         return dto;
@@ -121,6 +129,10 @@ public class MatchAdminService {
         matchRepo.save(m);
 
         log.info("[forceDeadlineAndStart] ✓ match {} cerrado y en juego", matchId);
+
+        // Notificar a los usuarios que hicieron pick en este partido
+        sendMatchNotification(m, "Empieza el partido!", m.getPlayer1() + " vs " + m.getPlayer2() + " esta en juego");
+
         return m;
     }
 
@@ -266,5 +278,18 @@ public class MatchAdminService {
             courtQueueService.recadenarAlBorrar(id, m.getCourt(), m.getMatchDate());
         }
         matchRepo.deleteById(id);
+    }
+
+    @Async
+    public void sendMatchNotification(Match match, String title, String body) {
+        try {
+            List<Pick> picks = pickRepo.findByMatchId(match.getId());
+            log.info("[sendMatchNotification] {} picks para match {}", picks.size(), match.getId());
+            for (Pick p : picks) {
+                notificationService.sendToUser(p.getUser().getId(), title, body);
+            }
+        } catch (Exception e) {
+            log.error("[sendMatchNotification] error: {}", e.getMessage());
+        }
     }
 }

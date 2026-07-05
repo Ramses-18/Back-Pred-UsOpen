@@ -4,6 +4,7 @@ import com.wimbledon.dto.LeaderboardEntryDto;
 import com.wimbledon.entity.*;
 import com.wimbledon.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ScoreService {
 
     private static final int PTS_WINNER       = 1;
@@ -29,8 +31,13 @@ public class ScoreService {
 
     /** Calcula puntos de un pick individual contra su resultado */
     public int calcPickPoints(Pick pick, MatchResult res) {
+        log.info("[calcPickPoints-DEBUG] pickWinner='{}' resWinner='{}' equalsIgnoreCase={}",
+            pick.getWinner(), res.getWinner(), pick.getWinner().equalsIgnoreCase(res.getWinner()));
         int pts = 0;
-        if (!pick.getWinner().equalsIgnoreCase(res.getWinner())) return 0;
+        if (!pick.getWinner().equalsIgnoreCase(res.getWinner())) {
+            log.info("[calcPickPoints-DEBUG] GANADOR NO COINCIDE → return 0");
+            return 0;
+        }
 
         pts += PTS_WINNER;
 
@@ -52,12 +59,19 @@ public class ScoreService {
         boolean setsLoserOk = pickSetsLoser != null && realSetsLoser != null
             && pickSetsLoser.equals(realSetsLoser);
 
+        log.info("[calcPickPoints-DEBUG] realCounts[w={},l={}] pickCounts[w={},l={}] realSetsW={} realSetsL={} pickSetsW={} pickSetsL={} setsWinnerOk={} setsLoserOk={}",
+            realCounts[0], realCounts[1], pickCounts[0], pickCounts[1],
+            realSetsWinner, realSetsLoser, pickSetsWinner, pickSetsLoser,
+            setsWinnerOk, setsLoserOk);
+
         if (setsWinnerOk && setsLoserOk) {
             pts += PTS_SETS;
         }
 
         // +10 si acertó el resultado exacto set a set
-        if (esResultadoExacto(pick, res))
+        boolean exact = esResultadoExacto(pick, res);
+        log.info("[calcPickPoints-DEBUG] esResultadoExacto={} ptsAntes={} ptsFinal={}", exact, pts, pts + (exact ? PTS_EXACT : 0));
+        if (exact)
             pts += PTS_EXACT;
 
         return pts;

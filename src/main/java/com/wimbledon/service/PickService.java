@@ -78,10 +78,21 @@ public class PickService {
             Pick p = optPick.get();
             int pts = 0;
             if (optRes.isPresent()) {
+                MatchResult r = optRes.get();
+                log.info("[toDto-DEBUG] matchId={} pickWinner={} resWinner={} pickSetsWinner={} pickSetsLoser={} resSetsWinner={} resSetsLoser={}",
+                    m.getId(), p.getWinner(), r.getWinner(),
+                    p.getSetsWinner(), p.getSetsLoser(), r.getSetsWinner(), r.getSetsLoser());
+                log.info("[toDto-DEBUG] matchId={} pickSets: s1W={} s1L={} s2W={} s2L={} s3W={} s3L={} s4W={} s4L={} s5W={} s5L={}",
+                    m.getId(), p.getSet1W(), p.getSet1L(), p.getSet2W(), p.getSet2L(),
+                    p.getSet3W(), p.getSet3L(), p.getSet4W(), p.getSet4L(), p.getSet5W(), p.getSet5L());
+                log.info("[toDto-DEBUG] matchId={} resSets: s1W={} s1L={} s2W={} s2L={} s3W={} s3L={} s4W={} s4L={} s5W={} s5L={}",
+                    m.getId(), r.getSet1W(), r.getSet1L(), r.getSet2W(), r.getSet2L(),
+                    r.getSet3W(), r.getSet3L(), r.getSet4W(), r.getSet4L(), r.getSet5W(), r.getSet5L());
                 try {
-                    pts = scoreService.calcPickPoints(p, optRes.get());
+                    pts = scoreService.calcPickPoints(p, r);
+                    log.info("[toDto-DEBUG] matchId={} calcPickPoints resultado={}pts", m.getId(), pts);
                 } catch (Exception e) {
-                    log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage());
+                    log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage(), e);
                     pts = 0;
                 }
             }

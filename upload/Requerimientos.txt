@@ -1,2 +1,3 @@
-- Sacame todos los partidos de la hoja hoy. Solo deben verse los que tenga fecha de ese mismo dia.
-- Para los cuadros, el admin solo podra el resultado en sets, que se vea asi en la hoja cuadro.
+- Sacame un la seccion torneo de ahi abajo y ponela como un boton disponible para aquellos que no hiceron su pick en la hoja de tabla.
+- Cambia el orden de hoy, cuadro y tabla. ponelos hoy, tabla y cuadro.
+- Quita los emotes de estos, debe quedar el nombre de las hojas. Tambien de donde dice Wimbledon, quita el emote de la raqueta.  

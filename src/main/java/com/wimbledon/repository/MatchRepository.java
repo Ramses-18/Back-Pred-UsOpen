@@ -16,6 +16,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 
     List<Match> findByMatchDateAndStatusIn(LocalDate date, List<String> statuses);
 
+    List<Match> findByMatchDateGreaterThanEqualOrderByMatchDateAscMatchTimeAsc(LocalDate date);
+
     Match findByFollowsMatchId(Long followsMatchId);
 
     @Query(value = "SELECT COALESCE(MAX(order_in_court), 0) FROM matches WHERE match_date = :date AND court = :court",

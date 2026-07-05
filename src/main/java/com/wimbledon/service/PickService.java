@@ -33,9 +33,7 @@ public class PickService {
     public List<MatchDto> getTodayAndTomorrowMatches(String email) {
         User user = findUser(email);
         LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
-        LocalDate tomorrow = today.plusDays(1);
-        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
-        matches.addAll(matchRepo.findByMatchDateOrderByMatchTimeAsc(tomorrow));
+        List<Match> matches = matchRepo.findByMatchDateGreaterThanEqualOrderByMatchDateAscMatchTimeAsc(today);
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 

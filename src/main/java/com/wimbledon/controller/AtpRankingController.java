@@ -22,26 +22,30 @@ public class AtpRankingController {
     }
 
     @PostMapping
-    public ResponseEntity<AtpRanking> addPlayer(@RequestBody Map<String, Object> body) {
-        String name = (String) body.get("playerName");
-        Integer points = ((Number) body.get("points")).intValue();
-        return ResponseEntity.ok(service.addPlayer(name, points));
+    public ResponseEntity<?> add(@RequestBody Map<String, Object> body) {
+        try {
+            String name = (String) body.get("playerName");
+            int points = ((Number) body.get("points")).intValue();
+            return ResponseEntity.ok(service.add(name, points));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<AtpRanking> updatePlayer(
-            @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
-        String name = (String) body.get("playerName");
-        Integer points = body.get("points") != null
-                ? ((Number) body.get("points")).intValue()
-                : null;
-        return ResponseEntity.ok(service.updatePlayer(id, name, points));
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        try {
+            String name = (String) body.get("playerName");
+            int points = ((Number) body.get("points")).intValue();
+            return ResponseEntity.ok(service.update(id, name, points));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePlayer(@PathVariable Long id) {
-        service.deletePlayer(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.delete(id);
         return ResponseEntity.noContent().build();
     }
 }

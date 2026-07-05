@@ -27,50 +27,19 @@ public class PickService {
         User user = findUser(email);
         LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
-        return matches.stream().map(m -> toDtoSafe(m, user)).collect(Collectors.toList());
+        return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
-    public List<MatchDto> getAllMatches(String email) {
+    public List<MatchDto> getTodayAndTomorrowMatches(String email) {
         User user = findUser(email);
-        List<Match> matches = matchRepo.findAllByOrderByMatchDateAscMatchTimeAscOrderInCourtAsc();
-        return matches.stream().map(m -> toDtoSafe(m, user)).collect(Collectors.toList());
-    }
-
-    private MatchDto toDtoSafe(Match m, User user) {
-        try {
-            return toDto(m, user);
-        } catch (Exception e) {
-            log.error("[toDtoSafe] error en match {}: {}", m.getId(), e.getMessage(), e);
-            // Devolver el match sin pick ni resultado
-            return MatchDto.builder()
-                .id(m.getId())
-                .matchDate(m.getMatchDate())
-                .matchTime(m.getMatchTime())
-                .court(m.getCourt())
-                .player1(m.getPlayer1())
-                .player2(m.getPlayer2())
-                .round(m.getRound())
-                .orderInCourt(m.getOrderInCourt())
-                .followsMatchId(m.getFollowsMatchId())
-                .status(m.getStatus())
-                .actualStartTime(m.getActualStartTime())
-                .actualEndTime(m.getActualEndTime())
-                .estimatedStartTime(computeEstimatedStart(m))
-                .deadlineForced(Boolean.TRUE.equals(m.getDeadlineForced()))
-                .deadlinePassed(isDeadlinePassed(m))
-                .build();
-        }
+        LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
+        List<Match> matches = matchRepo.findByMatchDateGreaterThanEqualOrderByMatchDateAscMatchTimeAsc(today);
+        return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
     private MatchDto toDto(Match m, User user) {
         Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
         Optional<Pick>        optPick = pickRepo.findByUserIdAndMatchId(user.getId(), m.getId());
-
-        if (optRes.isPresent()) {
-            MatchResult r = optRes.get();
-            log.debug("[toDto] match {} tiene result: id={}, winner={}, s1W={}, s1L={}, s2W={}, s2L={}",
-                m.getId(), r.getId(), r.getWinner(), r.getSet1W(), r.getSet1L(), r.getSet2W(), r.getSet2L());
-        }
 
         MatchResultDto resDto = optRes.map(r -> MatchResultDto.builder()
             .winner(r.getWinner())
@@ -88,39 +57,11 @@ public class PickService {
         PickDto pickDto = null;
         if (optPick.isPresent()) {
             Pick p = optPick.get();
-            int pts = 0;
-
-            // Calcular sets efectivos del pick
-            int[] pickCounts = scoreService.contarSetsPick(p);
-            Integer effPickSW = p.getSetsWinner();
-            Integer effPickSL = p.getSetsLoser();
-            if (pickCounts[0] + pickCounts[1] > 0) {
-                effPickSW = pickCounts[0];
-                effPickSL = pickCounts[1];
-            }
-
-            if (optRes.isPresent()) {
-                MatchResult r = optRes.get();
-                try {
-                    pts = scoreService.calcPickPoints(p, r);
-                } catch (Exception e) {
-                    log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage(), e);
-                    pts = 0;
-                }
-
-                // Inyectar sets computados en el resultDto para el desglose del frontend
-                int[] realCounts = scoreService.contarSets(r);
-                if (realCounts[0] + realCounts[1] > 0) {
-                    resDto.setSetsWinner(realCounts[0]);
-                    resDto.setSetsLoser(realCounts[1]);
-                }
-            }
-
+            int pts = optRes.isPresent() ? scoreService.calcPickPoints(p, optRes.get()) : 0;
             pickDto = PickDto.builder()
             .matchId(m.getId())
             .winner(p.getWinner())
-            .setsWinner(effPickSW)
-            .setsLoser(effPickSL)
+            .setsWinner(p.getSetsWinner())
             .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
             .pointsEarned(pts)
             .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))
@@ -161,7 +102,7 @@ public class PickService {
         boolean deadlinePassed = isDeadlinePassed(match);
         Optional<Pick> existing = pickRepo.findByUserIdAndMatchId(user.getId(), matchId);
 
-        if (existing.isPresent() && deadlinePassed) {
+        if (deadlinePassed) {
             if (!req.isUseCorrection())
                 throw new IllegalStateException("El plazo de pronóstico ya cerró.");
             boolean alreadyUsed = corrRepo.existsByUserIdAndUsedDate(user.getId(), LocalDate.now());
@@ -169,9 +110,6 @@ public class PickService {
                 throw new IllegalStateException("Ya usaste tu corrección del día.");
             corrRepo.save(DailyCorrection.builder().user(user).usedDate(LocalDate.now()).build());
         }
-
-        if (!existing.isPresent() && deadlinePassed && !req.isUseCorrection())
-            throw new IllegalStateException("El plazo de pronóstico ya cerró.");
 
         if (!req.getWinner().equalsIgnoreCase(match.getPlayer1())
          && !req.getWinner().equalsIgnoreCase(match.getPlayer2()))
@@ -211,8 +149,12 @@ public class PickService {
             .build();
     }
 
+    /**
+     * FIX Req 3: Deadline 100% manual por el admin.
+     * Solo se cierra cuando el admin explicitamente fuerza el cierre (deadlineForced = true).
+     * Ya NO se cierra automaticamente por horario ni por cambio de status.
+     */
     private boolean isDeadlinePassed(Match match) {
-        // Solo el admin controla el plazo mediante deadlineForced
         return Boolean.TRUE.equals(match.getDeadlineForced());
     }
 
@@ -236,7 +178,7 @@ public class PickService {
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 
-    private int safeInt(Integer value) {
+    private Integer safeInt(Integer value) {
         return value != null ? value : 0;
     }
 }

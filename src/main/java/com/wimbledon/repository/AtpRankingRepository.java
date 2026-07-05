@@ -8,4 +8,6 @@ import java.util.List;
 public interface AtpRankingRepository extends JpaRepository<AtpRanking, Long> {
 
     List<AtpRanking> findAllByOrderByPointsDescIdAsc();
+
+    long count();
 }

@@ -5,7 +5,6 @@ import com.wimbledon.entity.Match;
 import com.wimbledon.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -13,12 +12,10 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@Slf4j
 public class AdminController {
 
     private final MatchAdminService          matchAdminService;
     private final TournamentPickServiceFacade facade;
-    private final TennisApiService           tennisApiService;
 
     @PostMapping("/matches")
     public ResponseEntity<Match> createMatch(@Valid @RequestBody MatchCreateRequest req) {
@@ -43,14 +40,6 @@ public class AdminController {
         return ResponseEntity.ok(facade.saveResult(req));
     }
 
-    /** Trae partidos en vivo de la API y los inserta en DB si no existen.
-     *  NO cambia status ni guarda resultados — eso lo hace el admin manualmente. */
-    @PostMapping("/sync/live")
-    public ResponseEntity<Map<String, String>> syncLive() {
-        tennisApiService.syncLiveEvents();
-        return ResponseEntity.ok(Map.of("status", "Partidos en vivo sincronizados"));
-    }
-
     /** Cambio manual de status (admin inicia/suspende/finaliza partido). */
     @PatchMapping("/matches/{matchId}/status")
     public ResponseEntity<Match> updateMatchStatus(
@@ -60,38 +49,26 @@ public class AdminController {
         return ResponseEntity.ok(matchAdminService.updateStatus(matchId, newStatus));
     }
 
-    /** NUEVO — Forzar cierre de pronóstico + pasar a IN_PLAY en un solo paso. */
+    /**
+     * FIX Req 3: Solo cerrar pronóstico sin cambiar status del partido.
+     * El admin cierra los pronósticos cuando quiere; el partido sigue SCHEDULED hasta que decida iniciarlo.
+     */
+    @PostMapping("/matches/{matchId}/force-deadline")
+    public ResponseEntity<Match> forceDeadline(@PathVariable Long matchId) {
+        return ResponseEntity.ok(matchAdminService.forceDeadline(matchId));
+    }
+
+    /** Cerrar pronóstico + pasar a IN_PLAY en un solo paso. */
     @PostMapping("/matches/{matchId}/force-start")
     public ResponseEntity<Match> forceDeadlineAndStart(@PathVariable Long matchId) {
         return ResponseEntity.ok(matchAdminService.forceDeadlineAndStart(matchId));
     }
 
-    /** Solo cerrar pronóstico (sin cambiar status del partido). */
-    @PostMapping("/matches/{matchId}/force-deadline")
-    public ResponseEntity<Match> forceDeadlineOnly(@PathVariable Long matchId) {
-        return ResponseEntity.ok(matchAdminService.forceDeadlineOnly(matchId));
-    }
-
-    /** NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED). */
+    /** Cargar score parcial durante el partido (sin winner, sin FINISHED). */
     @PatchMapping("/matches/{matchId}/live-score")
     public ResponseEntity<MatchResultDto> updateLiveScore(
             @PathVariable Long matchId,
             @RequestBody MatchResultDto dto) {
-        log.info("[PATCH /admin/matches/{}/live-score] request body: {}", matchId, dto);
-        try {
-            MatchResultDto result = matchAdminService.updateLiveScore(matchId, dto);
-            log.info("[PATCH /admin/matches/{}/live-score] ✓ response OK", matchId);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("[PATCH /admin/matches/{}/live-score] ✗ ERROR: {} - {}", matchId, e.getClass().getSimpleName(), e.getMessage(), e);
-            throw e;
-        }
-    }
-
-    /** Sincronizar partidos de mañana desde la API de tennis. */
-    @PostMapping("/sync/tomorrow")
-    public ResponseEntity<Map<String, String>> syncTomorrow() {
-        tennisApiService.syncTomorrowEvents();
-        return ResponseEntity.ok(Map.of("status", "Partidos de mañana sincronizados"));
+        return ResponseEntity.ok(matchAdminService.updateLiveScore(matchId, dto));
     }
 }

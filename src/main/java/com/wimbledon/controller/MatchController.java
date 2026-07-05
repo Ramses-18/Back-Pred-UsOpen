@@ -31,11 +31,10 @@ public class MatchController {
         }
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<MatchDto>> all(Authentication auth) {
-        log.info("[/all] user={}", auth.getName());
-        List<MatchDto> result = pickService.getAllMatches(auth.getName());
-        return ResponseEntity.ok(result);
+    @GetMapping("/upcoming")
+    public ResponseEntity<List<MatchDto>> upcoming(Authentication auth) {
+        log.info("[/upcoming] user={}", auth.getName());
+        return ResponseEntity.ok(pickService.getTodayAndTomorrowMatches(auth.getName()));
     }
 
     @PostMapping("/{matchId}/pick")

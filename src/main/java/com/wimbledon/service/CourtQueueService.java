@@ -10,7 +10,6 @@ import java.util.List;
 
 /**
  * Service para manejar la cola por cancha (follows_match_id, order_in_court).
- * Vive aparte para evitar dependencias circulares entre TennisApiService y MatchAdminService.
  */
 @Service
 @RequiredArgsConstructor

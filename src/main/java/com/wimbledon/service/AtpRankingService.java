@@ -12,6 +12,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AtpRankingService {
 
+    private static final int MAX_PLAYERS = 100;
+
     private final AtpRankingRepository repo;
 
     public List<AtpRanking> getAll() {
@@ -19,33 +21,26 @@ public class AtpRankingService {
     }
 
     @Transactional
-    public AtpRanking addPlayer(String playerName, Integer points) {
-        long count = repo.count();
-        if (count >= 100) {
-            throw new RuntimeException("Se alcanzó el máximo de 100 jugadores");
+    public AtpRanking add(String playerName, int points) {
+        if (repo.count() >= MAX_PLAYERS) {
+            throw new RuntimeException("Se alcanzó el máximo de " + MAX_PLAYERS + " jugadores");
         }
-        AtpRanking entry = AtpRanking.builder()
-                .playerName(playerName.trim())
+        return repo.save(AtpRanking.builder()
+                .playerName(playerName)
                 .points(points)
-                .build();
-        return repo.save(entry);
+                .build());
     }
 
     @Transactional
-    public AtpRanking updatePlayer(Long id, String playerName, Integer points) {
-        AtpRanking entry = repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Jugador no encontrado"));
-        if (playerName != null && !playerName.isBlank()) {
-            entry.setPlayerName(playerName.trim());
-        }
-        if (points != null) {
-            entry.setPoints(points);
-        }
-        return repo.save(entry);
+    public AtpRanking update(Long id, String playerName, int points) {
+        AtpRanking r = repo.findById(id).orElseThrow(() -> new RuntimeException("Jugador no encontrado"));
+        r.setPlayerName(playerName);
+        r.setPoints(points);
+        return repo.save(r);
     }
 
     @Transactional
-    public void deletePlayer(Long id) {
+    public void delete(Long id) {
         repo.deleteById(id);
     }
 }

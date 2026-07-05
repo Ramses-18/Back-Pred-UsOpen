@@ -8,7 +8,8 @@ public class MatchResultDto {
     private String winner;
     private Integer setsWinner;
     private Integer setsLoser;
-    private String gameResult;   // "6-3 6-4" string original de la API
+    private String gameResult;   // "6-3 6-4" string, o "RET" para retiro
+    private Boolean retired;
 
 
 

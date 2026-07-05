@@ -3,9 +3,8 @@
 
 
 
-- Sigue son dejar actualizar score en vivo.
-- Borrale al admin la opcion de pronosticar el resultado del torneo Tambien.
-- Cuando se cierra si dame la opcion de iniciar
-- Quiero que el agregar partidos se muestre desde un boton al lado del de sincronizar partidos.
-- Cambia el nombre en los visual. cuadro en vez de bracket.
+- Sigue son dejar actualizar score en vivo. pon logs y te ayudo.
+- Borrale al admin la opcion de pronosticar el resultado del torneo Tambien. desde lo visual. cambiale el nombre de syn partidos de manan a Sincronizar y Añadir.
+- En la parte ahora de cuadro que se vean los resultados exactos.
+
 

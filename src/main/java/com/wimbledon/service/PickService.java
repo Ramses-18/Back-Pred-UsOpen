@@ -30,6 +30,12 @@ public class PickService {
         return matches.stream().map(m -> toDtoSafe(m, user)).collect(Collectors.toList());
     }
 
+    public List<MatchDto> getAllMatches(String email) {
+        User user = findUser(email);
+        List<Match> matches = matchRepo.findAllByOrderByMatchDateAscMatchTimeAscOrderInCourtAsc();
+        return matches.stream().map(m -> toDtoSafe(m, user)).collect(Collectors.toList());
+    }
+
     private MatchDto toDtoSafe(Match m, User user) {
         try {
             return toDto(m, user);

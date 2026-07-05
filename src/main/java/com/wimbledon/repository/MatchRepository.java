@@ -12,6 +12,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 
     List<Match> findByMatchDateOrderByMatchTimeAsc(LocalDate date);
 
+    List<Match> findAllByOrderByMatchDateAscMatchTimeAscOrderInCourtAsc();
+
     List<Match> findByMatchDateAndCourtOrderByOrderInCourtAsc(LocalDate date, String court);
 
     List<Match> findByMatchDateAndStatusIn(LocalDate date, List<String> statuses);

@@ -1,33 +1,40 @@
 package com.wimbledon.controller;
 
-import com.wimbledon.dto.*;
-import com.wimbledon.service.TournamentPickServiceFacade;
+import com.wimbledon.dto.TournamentDto;
+import com.wimbledon.service.TournamentManagementService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/tournament")
+@RequestMapping("/api/tournaments")
 @RequiredArgsConstructor
+@Slf4j
 public class TournamentController {
 
-    private final TournamentPickServiceFacade facade;
+    private final TournamentManagementService tmService;
 
-
-    @GetMapping("/my-pick")
-    public ResponseEntity<TournamentPickDto> myPick(Authentication auth) {
-        return ResponseEntity.ok(facade.getMyPick(auth.getName()));
+    @GetMapping
+    public ResponseEntity<List<TournamentDto>> all() {
+        return ResponseEntity.ok(tmService.getAllTournaments());
     }
 
-    @PostMapping("/my-pick")
-    public ResponseEntity<TournamentPickDto> savePick(
-            @RequestBody TournamentPickRequest req, Authentication auth) {
-        return ResponseEntity.ok(facade.savePick(req, auth.getName()));
+    @GetMapping("/active")
+    public ResponseEntity<TournamentDto> active() {
+        TournamentDto dto = tmService.getActiveTournament();
+        return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/result")
-    public ResponseEntity<TournamentPickDto> getResult() {
-        return ResponseEntity.ok(facade.getResult());
+    @PostMapping
+    public ResponseEntity<TournamentDto> create(@RequestBody Map<String, String> body) {
+        String name = body.get("name");
+        String slug = body.get("slug");
+        if (name == null || slug == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(tmService.createTournament(name, slug));
     }
 }

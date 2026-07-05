@@ -1,3 +1,5 @@
-
-- Crea una nueva hoja con el ranking atp. El admin los va a poder cargar a piacere. Debe haber espacio para 100 jugadores. El admin debe poner el nombre del jugador y los puntos y el sistema los debe posicionar correctamente. Y una vez guardado poder editar los puntos de los jugadores y que el orden se altere o no.
-- Hace los espacios de hoy, tabla, cuadro y ahora ranking mas altos. Del mismo tamano que estaba antes con los emojis.
+- Saca la parte de ligas privadas. cuando tenga mas usuarios la usamos. gracias por la idea. Borra todo.
+- En la pagina hoy del admin, hay poco espacio entre en nombre del segundo jugador y el cierre de la burbuja que lo encierrra por debajo. solo ahi.
+- En la seccion partido por jugar deben mostrarse los partidos de ese dia y los del dia siguiente que esten la bd. Tambien le deben aparecer al admin. Separalos en la ventana admin del admin en partidos de hoy y manana.
+- No te pedi que hagas alguna connexion con una api. Los partidos son cargados manualmente y con comunicacion constante de la bd.
+- Dame una opcion para poner que uno de los jugadores se retiro al finalizar un encuentro.

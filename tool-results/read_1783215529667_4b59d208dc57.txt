@@ -1,0 +1,860 @@
+     1→     1→import React, { useEffect, useState } from 'react'
+     2→     2→import { api } from '../context/AuthContext.jsx'
+     3→     3→import { useToast } from '../context/ToastContext.jsx'
+     4→     4→
+     5→     5→const G = 'var(--green)'
+     6→     6→const COURTS = ['Centre Court','Court 1','Court 2','Court 3','Court 4','Court 5','Court 6','Court 7','Court 8','Court 9','Court 10','Court 11','Court 12','Court 13','Court 14','Court 15','Court 16','Court 17','Court 18','Court 19','Court 20']
+     7→     7→const ROUNDS = ['R128','R64','R32','R16','QF','SF','F']
+     8→     8→
+     9→     9→// Modal para cargar resultado FINAL (con ganador + sets)
+    10→    10→function ResultModal({ match, onClose, onSaved }) {
+    11→    11→  const { show } = useToast()
+    12→    12→  const [form, setForm] = useState({
+    13→    13→    winner: match.result?.winner || '',
+    14→    14→    sets: [
+    15→    15→      { w: match.result?.set1W ?? '', l: match.result?.set1L ?? '' },
+    16→    16→      { w: match.result?.set2W ?? '', l: match.result?.set2L ?? '' },
+    17→    17→      { w: match.result?.set3W ?? '', l: match.result?.set3L ?? '' },
+    18→    18→      { w: match.result?.set4W ?? '', l: match.result?.set4L ?? '' },
+    19→    19→      { w: match.result?.set5W ?? '', l: match.result?.set5L ?? '' },
+    20→    20→    ],
+    21→    21→  })
+    22→    22→  const [saving, setSaving] = useState(false)
+    23→    23→
+    24→    24→  const setSetScore = (idx, side, val) => setForm(f => {
+    25→    25→    const sets = f.sets.map((s, i) => i === idx ? { ...s, [side]: val } : s)
+    26→    26→    return { ...f, sets }
+    27→    27→  })
+    28→    28→
+    29→    29→  const countSetsWinner = () => {
+    30→    30→    let w = 0, l = 0
+    31→    31→    form.sets.forEach(s => {
+    32→    32→      if (s.w !== '' && s.l !== '') {
+    33→    33→        const wi = parseInt(s.w), li = parseInt(s.l)
+    34→    34→        if (!isNaN(wi) && !isNaN(li)) {
+    35→    35→          if (wi > li) w++; else if (li > wi) l++;
+    36→    36→        }
+    37→    37→      }
+    38→    38→    })
+    39→    39→    return { setsWinner: w > 0 ? w : null, setsLoser: l > 0 ? l : null }
+    40→    40→  }
+    41→    41→
+    42→    42→  const save = async () => {
+    43→    43→    if (!form.winner) { show('Elegí el ganador.', 'error'); return }
+    44→    44→    setSaving(true)
+    45→    45→    try {
+    46→    46→      const { setsWinner, setsLoser } = countSetsWinner()
+    47→    47→      const payload = {
+    48→    48→        winner: form.winner,
+    49→    49→        setsWinner,
+    50→    50→        setsLoser,
+    51→    51→        gameResult: null,
+    52→    52→      }
+    53→    53→      form.sets.forEach((s, i) => {
+    54→    54→        const n = i + 1
+    55→    55→        payload[`set${n}W`] = s.w !== '' ? parseInt(s.w) : null
+    56→    56→        payload[`set${n}L`] = s.l !== '' ? parseInt(s.l) : null
+    57→    57→      })
+    58→    58→      await api.post(`/admin/matches/${match.id}/result`, payload)
+    59→    59→      show('Resultado cargado ✓')
+    60→    60→      onSaved()
+    61→    61→      onClose()
+    62→    62→    } catch (e) {
+    63→    63→      show(e.response?.data?.error || 'Error.', 'error')
+    64→    64→    } finally { setSaving(false) }
+    65→    65→  }
+    66→    66→
+    67→    67→  return (
+    68→    68→    <div className="modal-overlay" onClick={onClose}>
+    69→    69→      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+    70→    70→        <div className="modal-handle" />
+    71→    71→        <div className="modal-header">
+    72→    72→          <div className="modal-title">Cargar resultado final</div>
+    73→    73→          <button className="modal-close" onClick={onClose}>×</button>
+    74→    74→        </div>
+    75→    75→        <p className="text-muted mb-12">
+    76→    76→          {match.player1} vs {match.player2}
+    77→    77→          <br />
+    78→    78→          <span style={{ fontSize: 11 }}>
+    79→    79→            {match.court} · {match.round}
+    80→    80→            {match.orderInCourt && ` · Partido #${match.orderInCourt}`}
+    81→    81→          </span>
+    82→    82→        </p>
+    83→    83→
+    84→    84→        <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Ganador</div>
+    85→    85→        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+    86→    86→          {[match.player1, match.player2].map(p => (
+    87→    87→            <button key={p} onClick={() => setForm(f => ({ ...f, winner: p }))} style={{
+    88→    88→              flex: 1, padding: '10px 6px', borderRadius: 8, cursor: 'pointer',
+    89→    89→              border: `1px solid ${form.winner === p ? G : 'var(--border)'}`,
+    90→    90→              background: form.winner === p ? G : 'var(--card-bg)',
+    91→    91→              color: form.winner === p ? 'white' : 'var(--text)',
+    92→    92→              fontSize: 13, fontWeight: 600,
+    93→    93→            }}>
+    94→    94→              {p}
+    95→    95→            </button>
+    96→    96→          ))}
+    97→    97→        </div>
+    98→    98→
+    99→    99→        {form.winner && (
+   100→   100→          <>
+   101→   101→            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Resultado por set</div>
+   102→   102→            <div style={{ display: 'grid', gridTemplateColumns: '60px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   103→   103→              <div />
+   104→   104→              {['Set 1','Set 2','Set 3','Set 4','Set 5'].map(s => (
+   105→   105→                <div key={s} style={{ fontSize: 9, color: '#888', textAlign: 'center', fontWeight: 600 }}>{s}</div>
+   106→   106→              ))}
+   107→   107→            </div>
+   108→   108→            {['w','l'].map((side) => (
+   109→   109→              <div key={side} style={{ display: 'grid', gridTemplateColumns: '60px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   110→   110→                <div style={{
+   111→   111→                  fontSize: 10, fontWeight: 600,
+   112→   112→                  color: side === 'w' ? G : '#888',
+   113→   113→                  display: 'flex', alignItems: 'center', overflow: 'hidden',
+   114→   114→                }}>
+   115→   115→                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+   116→   116→                    {side === 'w'
+   117→   117→                      ? form.winner
+   118→   118→                      : (form.winner === match.player1 ? match.player2 : match.player1)}
+   119→   119→                  </span>
+   120→   120→                </div>
+   121→   121→                {form.sets.map((s, i) => (
+   122→   122→                  <input key={i} type="number" min="0" max="7" value={s[side]}
+   123→   123→                    onChange={e => setSetScore(i, side, e.target.value)}
+   124→   124→                    style={{
+   125→   125→                      height: 32, borderRadius: 5, textAlign: 'center',
+   126→   126→                      fontSize: 13, fontWeight: 700, width: '100%', padding: 0, outline: 'none',
+   127→   127→                      border: `0.5px solid ${s[side] !== '' && side === 'w' ? G : 'var(--border)'}`,
+   128→   128→                      background: s[side] !== '' && side === 'w' ? 'var(--green-light)' : 'var(--cream)',
+   129→   129→                      color: s[side] !== '' ? (side === 'w' ? G : 'var(--text-mid)') : 'var(--text-muted)',
+   130→   130→                    }}
+   131→   131→                  />
+   132→   132→                ))}
+   133→   133→              </div>
+   134→   134→            ))}
+   135→   135→            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 14 }}>
+   136→   136→              Sets: <strong>{countSetsWinner().setsWinner ?? 0}-{countSetsWinner().setsLoser ?? 0}</strong>
+   137→   137→            </div>
+   138→   138→          </>
+   139→   139→        )}
+   140→   140→
+   141→   141→        <button className="btn btn-primary btn-full" onClick={save} disabled={saving}>
+   142→   142→          {saving ? 'Guardando...' : 'Guardar resultado'}
+   143→   143→        </button>
+   144→   144→      </div>
+   145→   145→    </div>
+   146→   146→  )
+   147→   147→}
+   148→   148→
+   149→   149→// Modal para cargar SCORE EN VIVO (sin winner)
+   150→   150→function LiveScoreModal({ match, onClose, onSaved }) {
+   151→   151→  const { show } = useToast()
+   152→   152→  const [sets, setSets] = useState([
+   153→   153→    { w: match.result?.set1W ?? '', l: match.result?.set1L ?? '' },
+   154→   154→    { w: match.result?.set2W ?? '', l: match.result?.set2L ?? '' },
+   155→   155→    { w: match.result?.set3W ?? '', l: match.result?.set3L ?? '' },
+   156→   156→    { w: match.result?.set4W ?? '', l: match.result?.set4L ?? '' },
+   157→   157→    { w: match.result?.set5W ?? '', l: match.result?.set5L ?? '' },
+   158→   158→  ])
+   159→   159→  const [saving, setSaving] = useState(false)
+   160→   160→
+   161→   161→  const setSetScore = (idx, side, val) => setSets(prev => prev.map((s, i) => i === idx ? { ...s, [side]: val } : s))
+   162→   162→
+   163→   163→  const save = async () => {
+   164→   164→    setSaving(true)
+   165→   165→    try {
+   166→   166→      const payload = { gameResult: null }
+   167→   167→      sets.forEach((s, i) => {
+   168→   168→        const n = i + 1
+   169→   169→        payload[`set${n}W`] = s.w !== '' ? parseInt(s.w) : null
+   170→   170→        payload[`set${n}L`] = s.l !== '' ? parseInt(s.l) : null
+   171→   171→      })
+   172→   172→      await api.patch(`/admin/matches/${match.id}/live-score`, payload)
+   173→   173→      show('Score en vivo actualizado ✓')
+   174→   174→      onSaved()
+   175→   175→      onClose()
+   176→   176→    } catch (e) {
+   177→   177→      show(e.response?.data?.error || 'Error.', 'error')
+   178→   178→    } finally { setSaving(false) }
+   179→   179→  }
+   180→   180→
+   181→   181→  return (
+   182→   182→    <div className="modal-overlay" onClick={onClose}>
+   183→   183→      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+   184→   184→        <div className="modal-handle" />
+   185→   185→        <div className="modal-header">
+   186→   186→          <div className="modal-title">Cargar score en vivo</div>
+   187→   187→          <button className="modal-close" onClick={onClose}>×</button>
+   188→   188→        </div>
+   189→   189→        <p className="text-muted mb-12">
+   190→   190→          {match.player1} vs {match.player2}
+   191→   191→        </p>
+   192→   192→
+   193→   193→        <div style={{ display: 'grid', gridTemplateColumns: '60px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   194→   194→          <div />
+   195→   195→          {['Set 1','Set 2','Set 3','Set 4','Set 5'].map(s => (
+   196→   196→            <div key={s} style={{ fontSize: 9, color: '#888', textAlign: 'center', fontWeight: 600 }}>{s}</div>
+   197→   197→          ))}
+   198→   198→        </div>
+   199→   199→        {['w','l'].map((side) => (
+   200→   200→          <div key={side} style={{ display: 'grid', gridTemplateColumns: '60px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   201→   201→            <div style={{
+   202→   202→              fontSize: 10, fontWeight: 600,
+   203→   203→              color: side === 'w' ? G : '#888',
+   204→   204→              display: 'flex', alignItems: 'center', overflow: 'hidden',
+   205→   205→            }}>
+   206→   206→              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+   207→   207→                {side === 'w' ? match.player1 : match.player2}
+   208→   208→              </span>
+   209→   209→            </div>
+   210→   210→            {sets.map((s, i) => (
+   211→   211→              <input key={i} type="number" min="0" max="7" value={s[side]}
+   212→   212→                onChange={e => setSetScore(i, side, e.target.value)}
+   213→   213→                style={{
+   214→   214→                  height: 32, borderRadius: 5, textAlign: 'center',
+   215→   215→                  fontSize: 13, fontWeight: 700, width: '100%', padding: 0, outline: 'none',
+   216→   216→                  border: `0.5px solid ${s[side] !== '' && side === 'w' ? G : 'var(--border)'}`,
+   217→   217→                  background: s[side] !== '' && side === 'w' ? 'var(--green-light)' : 'var(--cream)',
+   218→   218→                  color: s[side] !== '' ? (side === 'w' ? G : 'var(--text-mid)') : 'var(--text-muted)',
+   219→   219→                }}
+   220→   220→              />
+   221→   221→            ))}
+   222→   222→          </div>
+   223→   223→        ))}
+   224→   224→
+   225→   225→        <button className="btn btn-primary btn-full" onClick={save} disabled={saving} style={{ marginTop: 14 }}>
+   226→   226→          {saving ? 'Guardando...' : 'Actualizar score en vivo'}
+   227→   227→        </button>
+   228→   228→      </div>
+   229→   229→    </div>
+   230→   230→  )
+   231→   231→}
+   232→   232→
+   233→   233→export default function AdminPage() {
+   234→   234→  const { show } = useToast()
+   235→   235→  const [matches, setMatches] = useState([])
+   236→   236→  const [modal, setModal]         = useState(null)         // match para ResultModal
+   237→   237→  const [liveModal, setLiveModal] = useState(null)         // match para LiveScoreModal
+   238→   238→  const [tResult, setTResult] = useState({ champion: '', semis: ['','','',''] })
+   239→   239→  const [newMatch, setNewMatch] = useState({
+   240→   240→    matchDate: new Date().toLocaleDateString('en-CA'),
+   241→   241→    matchTime: '',
+   242→   242→    court: 'Centre Court',
+   243→   243→    player1: '',
+   244→   244→    player2: '',
+   245→   245→    round: 'R128',
+   246→   246→    followsMatchId: '',
+   247→   247→  })
+   248→   248→  const [savingT, setSavingT] = useState(false)
+   249→   249→  const [syncing, setSyncing] = useState(null)
+   250→   250→  // Bracket management
+   251→   251→  const [bracket, setBracket] = useState(null)
+   252→   252→  const [bracketLoading, setBracketLoading] = useState(true)
+   253→   253→  const [bracketError, setBracketError] = useState('')
+   254→   254→  const [bracketRound, setBracketRound] = useState('R128')
+   255→   255→  const [bracketModal, setBracketModal] = useState(null)
+   256→   256→
+   257→   257→  const load = async () => {
+   258→   258→    try {
+   259→   259→      const [m, tr] = await Promise.all([
+   260→   260→        api.get('/matches/today'),
+   261→   261→        api.get('/tournament/result'),
+   262→   262→      ])
+   263→   263→      setMatches(m.data)
+   264→   264→      setTResult(tr.data)
+   265→   265→    } catch (e) {
+   266→   266→      show(`Error cargando partidos: ${e.response?.data?.error || e.message}`, 'error')
+   267→   267→    }
+   268→   268→  }
+   269→   269→  useEffect(() => { load() }, [])
+   270→   270→  useEffect(() => { loadBracket() }, [])
+   271→   271→
+   272→   272→  const loadBracket = async () => {
+   273→   273→    setBracketLoading(true)
+   274→   274→    try {
+   275→   275→      const { data } = await api.get('/bracket')
+   276→   276→      setBracket(data)
+   277→   277→      setBracketError('')
+   278→   278→    } catch (e) {
+   279→   279→      setBracketError('Error al cargar el bracket.')
+   280→   280→    } finally {
+   281→   281→      setBracketLoading(false)
+   282→   282→    }
+   283→   283→  }
+   284→   284→
+   285→   285→  const initBracket = async () => {
+   286→   286→    if (!confirm('¿Inicializar el bracket? Esto crea 255 partidos vacíos (R128 → F). Solo se hace una vez.')) return
+   287→   287→    try {
+   288→   288→      await api.post('/bracket/init')
+   289→   289→      show('Bracket inicializado ✓')
+   290→   290→      loadBracket()
+   291→   291→    } catch (e) {
+   292→   292→      show(e.response?.data?.error || 'Error al inicializar', 'error')
+   293→   293→    }
+   294→   294→  }
+   295→   295→
+   296→   296→  const addMatch = async () => {
+   297→   297→    if (!newMatch.player1.trim() || !newMatch.player2.trim()) {
+   298→   298→      show('Completá ambos jugadores.', 'error'); return
+   299→   299→    }
+   300→   300→    try {
+   301→   301→      const payload = {
+   302→   302→        matchDate: newMatch.matchDate,
+   303→   303→        matchTime: newMatch.matchTime || null,
+   304→   304→        court: newMatch.court,
+   305→   305→        player1: newMatch.player1.trim(),
+   306→   306→        player2: newMatch.player2.trim(),
+   307→   307→        round: newMatch.round,
+   308→   308→        followsMatchId: newMatch.followsMatchId || null,
+   309→   309→      }
+   310→   310→      await api.post('/admin/matches', payload)
+   311→   311→      show('Partido agregado ✓')
+   312→   312→      setNewMatch(n => ({ ...n, player1: '', player2: '', followsMatchId: '' }))
+   313→   313→      load()
+   314→   314→    } catch (e) { show(e.response?.data?.error || 'Error.', 'error') }
+   315→   315→  }
+   316→   316→
+   317→   317→  const deleteMatch = async id => {
+   318→   318→    if (!confirm('¿Eliminar este partido? Se re-cadenará la cola.')) return
+   319→   319→    try { await api.delete(`/admin/matches/${id}`); show('Partido eliminado'); load() }
+   320→   320→    catch (e) { show('Error.', 'error') }
+   321→   321→  }
+   322→   322→
+   323→   323→  const changeStatus = async (matchId, newStatus) => {
+   324→   324→    if (!confirm(`¿Cambiar status a ${newStatus}?`)) return
+   325→   325→    try {
+   326→   326→      await api.patch(`/admin/matches/${matchId}/status`, { status: newStatus })
+   327→   327→      show(`Status: ${newStatus} ✓`)
+   328→   328→      load()
+   329→   329→    } catch (e) { show(e.response?.data?.error || 'Error.', 'error') }
+   330→   330→  }
+   331→   331→
+   332→   332→  // FIX Req 3: Solo cerrar pronóstico (sin cambiar status del partido)
+   333→   333→  const forceDeadline = async matchId => {
+   334→   334→    if (!confirm('¿Cerrar pronóstico? Los usuarios no podrán editar ni usar correcciones.')) return
+   335→   335→    try {
+   336→   336→      await api.post(`/admin/matches/${matchId}/force-deadline`)
+   337→   337→      show('Pronóstico cerrado ✓')
+   338→   338→      load()
+   339→   339→    } catch (e) { show(e.response?.data?.error || 'Error.', 'error') }
+   340→   340→  }
+   341→   341→
+   342→   342→  // Cerrar + iniciar en un paso
+   343→   343→  const forceStart = async matchId => {
+   344→   344→    if (!confirm('¿Cerrar pronóstico y pasar a EN JUEGO?')) return
+   345→   345→    try {
+   346→   346→      await api.post(`/admin/matches/${matchId}/force-start`)
+   347→   347→      show('Partido cerrado y en juego ✓')
+   348→   348→      load()
+   349→   349→    } catch (e) { show(e.response?.data?.error || 'Error.', 'error') }
+   350→   350→  }
+   351→   351→
+   352→   352→  // FIX Req 4: Sync manual de partidos de mañana (el automático es 1 vez/día a las 20:00)
+   353→   353→  const syncTomorrow = async () => {
+   354→   354→    setSyncing('tomorrow')
+   355→   355→    try {
+   356→   356→      await api.post('/admin/sync/tomorrow')
+   357→   357→      show('Sync de mañana ejecutado ✓')
+   358→   358→      load()
+   359→   359→    } catch (e) { show('Error en sync.', 'error') }
+   360→   360→    finally { setSyncing(null) }
+   361→   361→  }
+   362→   362→
+   363→   363→  const saveTResult = async () => {
+   364→   364→    setSavingT(true)
+   365→   365→    try {
+   366→   366→      await api.post('/admin/tournament/result', tResult)
+   367→   367→      show('Resultado de torneo guardado ✓')
+   368→   368→    } catch (e) { show('Error.', 'error') }
+   369→   369→    finally { setSavingT(false) }
+   370→   370→  }
+   371→   371→
+   372→   372→  const setTSemi = i => v => setTResult(r => {
+   373→   373→    const semis = [...(r.semis||['','','',''])]; semis[i] = v; return { ...r, semis }
+   374→   374→  })
+   375→   375→
+   376→   376→  const courtMatchesForFollows = matches.filter(m => m.court === newMatch.court)
+   377→   377→
+   378→   378→  // FIX Req 2: Detectar si el bracket está vacío
+   379→   379→  const bracketEmpty = bracket && bracket.matches && bracket.matches.length === 0
+   380→   380→  const roundMatches = (bracket?.matches || []).filter(m => m.round === bracketRound)
+   381→   381→
+   382→   382→  const STATUS_COLORS = {
+   383→   383→    'SCHEDULED': 'var(--text-muted)', 'IN_PLAY': 'var(--danger)', 'SUSPENDED': '#FF9800',
+   384→   384→    'FINISHED': G, 'WALKOVER': '#9C27B0', 'RETIRED': '#9C27B0', 'ABANDONED': '#795548',
+   385→   385→  }
+   386→   386→
+   387→   387→  return (
+   388→   388→    <div style={{ padding: 16 }}>
+   389→   389→      <h2 style={{ marginBottom: 4 }}>Panel de administrador</h2>
+   390→   390→      <p className="text-muted mb-16">Gestión de partidos y resultados</p>
+   391→   391→
+   392→   392→      {/* Sync */}
+   393→   393→      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+   394→   394→        <button className="btn btn-primary" style={{ flex: 1, background: syncing === 'tomorrow' ? 'var(--text-muted)' : 'var(--green-mid)' }}
+   395→   395→          onClick={syncTomorrow} disabled={syncing !== null}>
+   396→   396→          {syncing === 'tomorrow' ? 'Sincronizando...' : '📅 Sync partidos de mañana'}
+   397→   397→        </button>
+   398→   398→      </div>
+   399→   399→
+   400→   400→      {/* Add match */}
+   401→   401→      <h3 style={{ marginBottom: 10, fontSize: 14, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+   402→   402→        Agregar partido
+   403→   403→      </h3>
+   404→   404→      <div className="card" style={{ marginBottom: 16 }}>
+   405→   405→        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+   406→   406→          <div>
+   407→   407→            <label>Fecha</label>
+   408→   408→            <input type="date" value={newMatch.matchDate}
+   409→   409→              onChange={e => setNewMatch(n => ({ ...n, matchDate: e.target.value }))} />
+   410→   410→          </div>
+   411→   411→          <div>
+   412→   412→            <label>Hora (opcional)</label>
+   413→   413→            <input type="time" value={newMatch.matchTime}
+   414→   414→              onChange={e => setNewMatch(n => ({ ...n, matchTime: e.target.value }))} />
+   415→   415→          </div>
+   416→   416→        </div>
+   417→   417→        <div style={{ marginBottom: 8 }}>
+   418→   418→          <label>Cancha</label>
+   419→   419→          <select value={newMatch.court}
+   420→   420→            onChange={e => setNewMatch(n => ({ ...n, court: e.target.value, followsMatchId: '' }))}>
+   421→   421→            {COURTS.map(c => <option key={c}>{c}</option>)}
+   422→   422→          </select>
+   423→   423→        </div>
+   424→   424→        <div style={{ marginBottom: 8 }}>
+   425→   425→          <label>Ronda</label>
+   426→   426→          <select value={newMatch.round}
+   427→   427→            onChange={e => setNewMatch(n => ({ ...n, round: e.target.value }))}>
+   428→   428→            {ROUNDS.map(r => <option key={r}>{r}</option>)}
+   429→   429→          </select>
+   430→   430→        </div>
+   431→   431→        <div style={{ marginBottom: 8 }}>
+   432→   432→          <label>¿Sigue a otro partido en la misma cancha?</label>
+   433→   433→          <select value={newMatch.followsMatchId}
+   434→   434→            onChange={e => setNewMatch(n => ({ ...n, followsMatchId: e.target.value }))}>
+   435→   435→            <option value="">— No, es el primero —</option>
+   436→   436→            {courtMatchesForFollows.map(m => (
+   437→   437→              <option key={m.id} value={m.id}>#{m.orderInCourt}: {m.player1} vs {m.player2}</option>
+   438→   438→            ))}
+   439→   439→          </select>
+   440→   440→        </div>
+   441→   441→        <div style={{ marginBottom: 8 }}>
+   442→   442→          <label>Jugador 1</label>
+   443→   443→          <input type="text" placeholder="Escribí el nombre completo" value={newMatch.player1}
+   444→   444→            onChange={e => setNewMatch(n => ({ ...n, player1: e.target.value }))} />
+   445→   445→        </div>
+   446→   446→        <div style={{ marginBottom: 12 }}>
+   447→   447→          <label>Jugador 2</label>
+   448→   448→          <input type="text" placeholder="Escribí el nombre completo" value={newMatch.player2}
+   449→   449→            onChange={e => setNewMatch(n => ({ ...n, player2: e.target.value }))} />
+   450→   450→        </div>
+   451→   451→        <button className="btn btn-primary btn-full" onClick={addMatch}>+ Agregar partido</button>
+   452→   452→      </div>
+   453→   453→
+   454→   454→      {/* Today's matches */}
+   455→   455→      <h3 style={{ marginBottom: 10, fontSize: 14, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+   456→   456→        Partidos de hoy ({matches.length})
+   457→   457→      </h3>
+   458→   458→      <div className="card" style={{ marginBottom: 16, padding: 0, overflow: 'hidden' }}>
+   459→   459→        {matches.length === 0 && (
+   460→   460→          <p style={{ padding: 16, fontSize: 13, color: '#888' }}>No hay partidos para hoy.</p>
+   461→   461→        )}
+   462→   462→        {matches.map((m, i) => (
+   463→   463→          <div key={m.id} style={{
+   464→   464→            padding: '11px 14px',
+   465→   465→            borderBottom: i < matches.length - 1 ? '1px solid var(--border)' : 'none',
+   466→   466→          }}>
+   467→   467→            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+   468→   468→              <span style={{
+   469→   469→                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+   470→   470→                background: STATUS_COLORS[m.status] || '#888', color: '#fff',
+   471→   471→              }}>
+   472→   472→                {m.status || 'SCHEDULED'}
+   473→   473→              </span>
+   474→   474→              {m.orderInCourt && <span style={{ fontSize: 10, color: '#888' }}>#{m.orderInCourt} · {m.court}</span>}
+   475→   475→              {m.deadlineForced && <span style={{ fontSize: 10, color: 'var(--danger)' }}>🔒 pronóstico cerrado</span>}
+   476→   476→              {m.result && <span style={{ fontSize: 10, color: G, fontWeight: 700 }}>· ✓ score</span>}
+   477→   477→            </div>
+   478→   478→            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+   479→   479→              <div style={{ flex: 1 }}>
+   480→   480→                <div style={{ fontSize: 13, fontWeight: 700 }}>{m.player1} vs {m.player2}</div>
+   481→   481→                <div style={{ fontSize: 11, color: '#888' }}>
+   482→   482→                  {m.matchTime ? `${m.matchTime.slice(0,5)} hs` : 'Sin horario'} · {m.round}
+   483→   483→                </div>
+   484→   484→              </div>
+   485→   485→              <button onClick={() => setModal(m)} style={{
+   486→   486→                background: m.result ? 'var(--green-light)' : 'var(--card-bg)',
+   487→   487→                border: `1px solid ${m.result ? 'var(--green-mid)' : 'var(--border)'}`,
+   488→   488→                borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 600,
+   489→   489→                cursor: 'pointer', color: m.result ? G : 'var(--text-mid)',
+   490→   490→              }}>
+   491→   491→                {m.result ? '✓' : 'Final'}
+   492→   492→              </button>
+   493→   493→              <button onClick={() => deleteMatch(m.id)} style={{
+   494→   494→                background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: 8,
+   495→   495→                padding: '6px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--danger)',
+   496→   496→              }}>✕</button>
+   497→   497→            </div>
+   498→   498→
+   499→   499→            {/* FIX Req 3: Acciones del admin — separar cierre de pronóstico de inicio de partido */}
+   500→   500→            {m.status === 'SCHEDULED' && (
+   501→   501→              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+   502→   502→                {!m.deadlineForced && (
+   503→   503→                  <button onClick={() => forceDeadline(m.id)} style={statusBtnStyle('var(--danger)')}>
+   504→   504→                    🔒 Solo cerrar pronóstico
+   505→   505→                  </button>
+   506→   506→                )}
+   507→   507→                <button onClick={() => forceStart(m.id)} style={statusBtnStyle('#C62828')} disabled={m.deadlineForced}>
+   508→   508→                  🔒 Cerrar + Empezar
+   509→   509→                </button>
+   510→   510→                <button onClick={() => changeStatus(m.id, 'IN_PLAY')} style={statusBtnStyle('var(--green-mid)')}>
+   511→   511→                  ▶ Solo iniciar
+   512→   512→                </button>
+   513→   513→              </div>
+   514→   514→            )}
+   515→   515→            {m.status === 'IN_PLAY' && (
+   516→   516→              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+   517→   517→                <button onClick={() => setLiveModal(m)} style={statusBtnStyle('#1565C0')}>
+   518→   518→                  📊 Score en vivo
+   519→   519→                </button>
+   520→   520→                <button onClick={() => setModal(m)} style={statusBtnStyle(G)}>
+   521→   521→                  ✓ Finalizar
+   522→   522→                </button>
+   523→   523→                <button onClick={() => changeStatus(m.id, 'SUSPENDED')} style={statusBtnStyle('#FF9800')}>
+   524→   524→                  ⏸ Suspender
+   525→   525→                </button>
+   526→   526→              </div>
+   527→   527→            )}
+   528→   528→            {m.status === 'SUSPENDED' && (
+   529→   529→              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+   530→   530→                <button onClick={() => changeStatus(m.id, 'IN_PLAY')} style={statusBtnStyle('var(--danger)')}>
+   531→   531→                  ▶ Reanudar
+   532→   532→                </button>
+   533→   533→                <button onClick={() => setModal(m)} style={statusBtnStyle(G)}>✓ Finalizar</button>
+   534→   534→              </div>
+   535→   535→            )}
+   536→   536→          </div>
+   537→   537→        ))}
+   538→   538→      </div>
+   539→   539→
+   540→   540→      {/* FIX Req 2: Bracket management mejorado */}
+   541→   541→      <h3 style={{ marginBottom: 10, fontSize: 14, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+   542→   542→        Bracket del torneo
+   543→   543→      </h3>
+   544→   544→      <div className="card" style={{ marginBottom: 16 }}>
+   545→   545→        {bracketLoading ? (
+   546→   546→          <div className="spinner" />
+   547→   547→        ) : bracketError ? (
+   548→   548→          <>
+   549→   549→            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{bracketError}</p>
+   550→   550→            <button className="btn btn-primary btn-full" onClick={initBracket}>
+   551→   551→              🔧 Inicializar bracket
+   552→   552→            </button>
+   553→   553→          </>
+   554→   554→        ) : bracketEmpty ? (
+   555→   555→          <>
+   556→   556→            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+   557→   557→              El bracket aún no tiene partidos. Inicializalo para crear la estructura completa (R128 → Final).
+   558→   558→            </p>
+   559→   559→            <button className="btn btn-primary btn-full" onClick={initBracket}>
+   560→   560→              🔧 Inicializar bracket (255 partidos)
+   561→   561→            </button>
+   562→   562→          </>
+   563→   563→        ) : (
+   564→   564→          <>
+   565→   565→            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+   566→   566→              Elegí una ronda para editar los partidos. Cuando seteás un ganador, se propaga automáticamente al partido siguiente.
+   567→   567→            </p>
+   568→   568→            {/* Selector de ronda */}
+   569→   569→            <div style={{ display: 'flex', gap: 4, marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
+   570→   570→              {(bracket?.rounds || []).map(r => {
+   571→   571→                const count = (bracket?.matches || []).filter(m => m.round === r.key && (m.player1 || m.player2)).length
+   572→   572→                return (
+   573→   573→                  <button key={r.key} onClick={() => setBracketRound(r.key)} style={{
+   574→   574→                    padding: '6px 10px', fontSize: 10, fontWeight: 600, borderRadius: 5,
+   575→   575→                    border: `1px solid ${bracketRound === r.key ? G : 'var(--border)'}`,
+   576→   576→                    background: bracketRound === r.key ? G : 'var(--card-bg)',
+   577→   577→                    color: bracketRound === r.key ? 'white' : 'var(--text-muted)',
+   578→   578→                    cursor: 'pointer', whiteSpace: 'nowrap',
+   579→   579→                  }}>
+   580→   580→                    {r.label || r.key} ({count}/{r.count})
+   581→   581→                  </button>
+   582→   582→                )
+   583→   583→              })}
+   584→   584→            </div>
+   585→   585→            {/* Lista de partidos de la ronda seleccionada */}
+   586→   586→            <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+   587→   587→              {roundMatches.length === 0 ? (
+   588→   588→                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>
+   589→   589→                  No hay partidos en esta ronda.
+   590→   590→                </p>
+   591→   591→              ) : (
+   592→   592→                roundMatches.map(m => (
+   593→   593→                  <div key={m.id} style={{
+   594→   594→                    padding: '10px 12px', marginBottom: 6, borderRadius: 6,
+   595→   595→                    border: `1px solid ${m.winner ? 'var(--green-mid)' : 'var(--border)'}`,
+   596→   596→                    background: m.winner ? 'var(--green-pale)' : 'var(--card-bg)',
+   597→   597→                    cursor: 'pointer',
+   598→   598→                  }} onClick={() => setBracketModal(m)}>
+   599→   599→                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+   600→   600→                      <div style={{ flex: 1, minWidth: 0 }}>
+   601→   601→                        <div style={{ fontSize: 12, fontWeight: 600, color: m.winner === m.player1 ? G : 'var(--text)' }}>
+   602→   602→                          {m.winner === m.player1 ? '✓ ' : ''}{m.player1 || '—'}
+   603→   603→                          {m.scoreStr && m.winner === m.player1 && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{m.scoreStr}</span>}
+   604→   604→                        </div>
+   605→   605→                        <div style={{ fontSize: 12, fontWeight: 600, color: m.winner === m.player2 ? G : 'var(--text)' }}>
+   606→   606→                          {m.winner === m.player2 ? '✓ ' : ''}{m.player2 || '—'}
+   607→   607→                          {m.scoreStr && m.winner === m.player2 && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{m.scoreStr}</span>}
+   608→   608→                        </div>
+   609→   609→                      </div>
+   610→   610→                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+   611→   611→                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>#{m.positionInRound}</span>
+   612→   612→                        {m.status === 'FINISHED' && (
+   613→   613→                          <span style={{ fontSize: 9, fontWeight: 700, color: G, padding: '1px 6px', borderRadius: 4, background: 'var(--green-light)' }}>
+   614→   614→                            {m.setsWinner}-{m.setsLoser}
+   615→   615→                          </span>
+   616→   616→                        )}
+   617→   617→                      </div>
+   618→   618→                    </div>
+   619→   619→                  </div>
+   620→   620→                ))
+   621→   621→              )}
+   622→   622→            </div>
+   623→   623→          </>
+   624→   624→        )}
+   625→   625→      </div>
+   626→   626→
+   627→   627→      {/* Tournament result */}
+   628→   628→      <h3 style={{ marginBottom: 10, fontSize: 14, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+   629→   629→        Resultado del torneo
+   630→   630→      </h3>
+   631→   631→      <div className="card" style={{ marginBottom: 16 }}>
+   632→   632→        <div style={{ marginBottom: 10 }}>
+   633→   633→          <label>Campeón real</label>
+   634→   634→          <input type="text" placeholder="Nombre del campeón" value={tResult.champion || ''}
+   635→   635→            onChange={e => setTResult(r => ({ ...r, champion: e.target.value }))} />
+   636→   636→        </div>
+   637→   637→        {[0,1,2,3].map(i => (
+   638→   638→          <div key={i} style={{ marginBottom: 8 }}>
+   639→   639→            <label>Semifinalista {i+1}</label>
+   640→   640→            <input type="text" placeholder="Nombre" value={tResult.semis?.[i] || ''}
+   641→   641→              onChange={e => setTSemi(i)(e.target.value)} />
+   642→   642→          </div>
+   643→   643→        ))}
+   644→   644→        <button className="btn btn-primary btn-full mt-12" onClick={saveTResult} disabled={savingT}>
+   645→   645→          {savingT ? 'Guardando...' : 'Guardar resultado del torneo'}
+   646→   646→        </button>
+   647→   647→      </div>
+   648→   648→
+   649→   649→      {modal && <ResultModal match={modal} onClose={() => setModal(null)} onSaved={load} />}
+   650→   650→      {liveModal && <LiveScoreModal match={liveModal} onClose={() => setLiveModal(null)} onSaved={load} />}
+   651→   651→      {bracketModal && (
+   652→   652→        <BracketEditorModal
+   653→   653→          match={bracketModal}
+   654→   654→          onClose={() => setBracketModal(null)}
+   655→   655→          onSaved={() => { setBracketModal(null); loadBracket() }}
+   656→   656→        />
+   657→   657→      )}
+   658→   658→    </div>
+   659→   659→  )
+   660→   660→}
+   661→   661→
+   662→   662→function statusBtnStyle(color) {
+   663→   663→  return {
+   664→   664→    padding: '4px 8px', fontSize: 10, fontWeight: 600,
+   665→   665→    background: color, color: '#fff', border: 'none',
+   666→   666→    borderRadius: 5, cursor: 'pointer',
+   667→   667→  }
+   668→   668→}
+   669→   669→
+   670→   670→// FIX Req 2: Modal para editar un partido del bracket con sets individuales
+   671→   671→function BracketEditorModal({ match, onClose, onSaved }) {
+   672→   672→  const { show } = useToast()
+   673→   673→  const [form, setForm] = useState({
+   674→   674→    player1: match.player1 || '',
+   675→   675→    player2: match.player2 || '',
+   676→   676→    winner: match.winner || '',
+   677→   677→    sets: [
+   678→   678→      { w: '', l: '' },
+   679→   679→      { w: '', l: '' },
+   680→   680→      { w: '', l: '' },
+   681→   681→      { w: '', l: '' },
+   682→   682→      { w: '', l: '' },
+   683→   683→    ],
+   684→   684→  })
+   685→   685→
+   686→   686→  // Parsear scoreStr si existe para pre-cargar los sets
+   687→   687→  React.useEffect(() => {
+   688→   688→    if (match.scoreStr) {
+   689→   689→      const parts = match.scoreStr.split(',').map(s => s.trim())
+   690→   690→      const newSets = [{ w: '', l: '' }, { w: '', l: '' }, { w: '', l: '' }, { w: '', l: '' }, { w: '', l: '' }]
+   691→   691→      parts.forEach((part, i) => {
+   692→   692→        if (i < 5) {
+   693→   693→          const nums = part.split('-')
+   694→   694→          if (nums.length === 2) {
+   695→   695→            newSets[i] = { w: nums[0].trim(), l: nums[1].trim() }
+   696→   696→          }
+   697→   697→        }
+   698→   698→      })
+   699→   699→      setForm(f => ({ ...f, sets: newSets }))
+   700→   700→    }
+   701→   701→  }, [match.scoreStr])
+   702→   702→
+   703→   703→  const [saving, setSaving] = useState(false)
+   704→   704→
+   705→   705→  const setSetScore = (idx, side, val) => setForm(f => {
+   706→   706→    const sets = f.sets.map((s, i) => i === idx ? { ...s, [side]: val } : s)
+   707→   707→    return { ...f, sets }
+   708→   708→  })
+   709→   709→
+   710→   710→  const countSets = () => {
+   711→   711→    let w = 0, l = 0
+   712→   712→    form.sets.forEach(s => {
+   713→   713→      if (s.w !== '' && s.l !== '') {
+   714→   714→        const wi = parseInt(s.w), li = parseInt(s.l)
+   715→   715→        if (!isNaN(wi) && !isNaN(li)) {
+   716→   716→          if (wi > li) w++; else if (li > wi) l++;
+   717→   717→        }
+   718→   718→      }
+   719→   719→    })
+   720→   720→    return { setsWinner: w > 0 ? w : null, setsLoser: l > 0 ? l : null }
+   721→   721→  }
+   722→   722→
+   723→   723→  const buildScoreStr = () => {
+   724→   724→    return form.sets
+   725→   725→      .filter(s => s.w !== '' && s.l !== '')
+   726→   726→      .map(s => `${s.w}-${s.l}`)
+   727→   727→      .join(', ')
+   728→   728→  }
+   729→   729→
+   730→   730→  const save = async () => {
+   731→   731→    setSaving(true)
+   732→   732→    try {
+   733→   733→      const { setsWinner, setsLoser } = countSets()
+   734→   734→      await api.put(`/bracket/${match.id}`, {
+   735→   735→        player1: form.player1 || null,
+   736→   736→        player2: form.player2 || null,
+   737→   737→        winner: form.winner || null,
+   738→   738→        scoreStr: form.winner ? buildScoreStr() || null : null,
+   739→   739→        setsWinner: form.winner ? setsWinner : null,
+   740→   740→        setsLoser: form.winner ? setsLoser : null,
+   741→   741→        status: form.winner ? 'FINISHED' : 'SCHEDULED',
+   742→   742→      })
+   743→   743→      show('Partido del bracket actualizado ✓')
+   744→   744→      onSaved()
+   745→   745→    } catch (e) {
+   746→   746→      show(e.response?.data?.error || 'Error.', 'error')
+   747→   747→    } finally { setSaving(false) }
+   748→   748→  }
+   749→   749→
+   750→   750→  const clearWinner = async () => {
+   751→   751→    setSaving(true)
+   752→   752→    try {
+   753→   753→      await api.put(`/bracket/${match.id}`, { winner: null, scoreStr: null, setsWinner: null, setsLoser: null, status: 'SCHEDULED' })
+   754→   754→      show('Resultado limpiado ✓')
+   755→   755→      onSaved()
+   756→   756→    } catch (e) { show('Error.', 'error') }
+   757→   757→    finally { setSaving(false) }
+   758→   758→  }
+   759→   759→
+   760→   760→  const roundLabels = {
+   761→   761→    'R128': '1ra ronda', 'R64': '2da ronda', 'R32': '3ra ronda', 'R16': '4ta ronda',
+   762→   762→    'QF': 'Cuartos de final', 'SF': 'Semifinal', 'F': 'Final',
+   763→   763→  }
+   764→   764→
+   765→   765→  return (
+   766→   766→    <div className="modal-overlay" onClick={onClose}>
+   767→   767→      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+   768→   768→        <div className="modal-handle" />
+   769→   769→        <div className="modal-header">
+   770→   770→          <div className="modal-title">{roundLabels[match.round] || match.round} · Partido #{match.positionInRound}</div>
+   771→   771→          <button className="modal-close" onClick={onClose}>×</button>
+   772→   772→        </div>
+   773→   773→        <p className="text-muted mb-12">
+   774→   774→          Cargá los jugadores y el resultado con sets. El ganador se propaga automáticamente a la siguiente ronda.
+   775→   775→        </p>
+   776→   776→
+   777→   777→        <div className="form-group">
+   778→   778→          <label>Jugador 1</label>
+   779→   779→          <input type="text" placeholder="Nombre completo" value={form.player1}
+   780→   780→            onChange={e => setForm(f => ({ ...f, player1: e.target.value }))} />
+   781→   781→        </div>
+   782→   782→        <div className="form-group">
+   783→   783→          <label>Jugador 2</label>
+   784→   784→          <input type="text" placeholder="Nombre completo" value={form.player2}
+   785→   785→            onChange={e => setForm(f => ({ ...f, player2: e.target.value }))} />
+   786→   786→        </div>
+   787→   787→
+   788→   788→        {form.player1 && form.player2 && (
+   789→   789→          <>
+   790→   790→            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Ganador (dejar sin seleccionar si no terminó)</div>
+   791→   791→            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+   792→   792→              {[form.player1, form.player2].filter(Boolean).map(p => (
+   793→   793→                <button key={p} onClick={() => setForm(f => ({ ...f, winner: f.winner === p ? '' : p }))} style={{
+   794→   794→                  flex: 1, padding: '10px 6px', borderRadius: 8, cursor: 'pointer',
+   795→   795→                  border: `1px solid ${form.winner === p ? G : 'var(--border)'}`,
+   796→   796→                  background: form.winner === p ? G : 'var(--card-bg)',
+   797→   797→                  color: form.winner === p ? 'white' : 'var(--text)',
+   798→   798→                  fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+   799→   799→                }}>
+   800→   800→                  {form.winner === p ? '✓ ' : ''}{p}
+   801→   801→                </button>
+   802→   802→              ))}
+   803→   803→            </div>
+   804→   804→          </>
+   805→   805→        )}
+   806→   806→
+   807→   807→        {form.winner && (
+   808→   808→          <>
+   809→   809→            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Resultado por set</div>
+   810→   810→            <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   811→   811→              <div />
+   812→   812→              {['Set 1','Set 2','Set 3','Set 4','Set 5'].map(s => (
+   813→   813→                <div key={s} style={{ fontSize: 9, color: '#888', textAlign: 'center', fontWeight: 600 }}>{s}</div>
+   814→   814→              ))}
+   815→   815→            </div>
+   816→   816→            {['w','l'].map((side) => (
+   817→   817→              <div key={side} style={{ display: 'grid', gridTemplateColumns: '56px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   818→   818→                <div style={{
+   819→   819→                  fontSize: 10, fontWeight: 600,
+   820→   820→                  color: side === 'w' ? G : '#888',
+   821→   821→                  display: 'flex', alignItems: 'center', overflow: 'hidden',
+   822→   822→                }}>
+   823→   823→                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9 }}>
+   824→   824→                    {side === 'w'
+   825→   825→                      ? form.winner.split(' ').pop()
+   826→   826→                      : (form.winner === form.player1 ? form.player2 : form.player1).split(' ').pop()}
+   827→   827→                  </span>
+   828→   828→                </div>
+   829→   829→                {form.sets.map((s, i) => (
+   830→   830→                  <input key={i} type="number" min="0" max="7" value={s[side]}
+   831→   831→                    onChange={e => setSetScore(i, side, e.target.value)}
+   832→   832→                    style={{
+   833→   833→                      height: 32, borderRadius: 5, textAlign: 'center',
+   834→   834→                      fontSize: 13, fontWeight: 700, width: '100%', padding: 0, outline: 'none',
+   835→   835→                      border: `0.5px solid ${s[side] !== '' && side === 'w' ? G : 'var(--border)'}`,
+   836→   836→                      background: s[side] !== '' && side === 'w' ? 'var(--green-light)' : 'var(--cream)',
+   837→   837→                      color: s[side] !== '' ? (side === 'w' ? G : 'var(--text-mid)') : 'var(--text-muted)',
+   838→   838→                    }}
+   839→   839→                  />
+   840→   840→                ))}
+   841→   841→              </div>
+   842→   842→            ))}
+   843→   843→            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 14 }}>
+   844→   844→              Sets: <strong>{countSets().setsWinner ?? 0}-{countSets().setsLoser ?? 0}</strong>
+   845→   845→            </div>
+   846→   846→          </>
+   847→   847→        )}
+   848→   848→
+   849→   849→        <button className="btn btn-primary btn-full" onClick={save} disabled={saving} style={{ marginBottom: 8 }}>
+   850→   850→          {saving ? 'Guardando...' : 'Guardar partido'}
+   851→   851→        </button>
+   852→   852→        {match.winner && (
+   853→   853→          <button className="btn btn-danger btn-full" onClick={clearWinner} disabled={saving}>
+   854→   854→            Limpiar resultado
+   855→   855→          </button>
+   856→   856→        )}
+   857→   857→      </div>
+   858→   858→    </div>
+   859→   859→  )
+   860→   860→}

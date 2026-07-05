@@ -1,0 +1,12 @@
+
+
+
+
+
+- Sigue son dejar actualizar score en vivo.
+- Quiero que el admin no pueda pronosticar nada. Borra esa opcion.
+- Quiero que en la ventana de admin este boton para actualizar a las 20:00 y el de agregar partidos. Y una vez apriete esa pagina asparezca.
+- Cuando el admin hace el cierre que no aparezca que el lo cerro. Debe mostrar que se cerro y punto.
+- no se ve el historial de picks (mensaje internar error)
+- no funciona la opcion solo cerrar (mensaje de error) y saca la opcion solo iniciar. 
+- no funciona el syc partidos de manana tira erro en sync

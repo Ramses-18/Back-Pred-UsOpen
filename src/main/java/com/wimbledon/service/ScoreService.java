@@ -108,14 +108,15 @@ public class ScoreService {
         if (pick.getSet1W() == null || res.getSet1W() == null) return false;
 
         boolean s1 = eq(pick.getSet1W(), res.getSet1W()) && eq(pick.getSet1L(), res.getSet1L());
-        boolean s2 = eq(pick.getSet2W(), res.getSet2W()) && eq(pick.getSet2L(), res.getSet2L());
 
-        // Set 3-5: si ambos son null se considera correcto (partido no llegó a ese set)
-        boolean s3 = ambosNull(pick.getSet3W(), res.getSet3W())
+        // Set 2-5: si ambos son null en W y L se considera correcto (partido no llegó a ese set)
+        boolean s2 = (ambosNull(pick.getSet2W(), res.getSet2W()) && ambosNull(pick.getSet2L(), res.getSet2L()))
+            || (eq(pick.getSet2W(), res.getSet2W()) && eq(pick.getSet2L(), res.getSet2L()));
+        boolean s3 = (ambosNull(pick.getSet3W(), res.getSet3W()) && ambosNull(pick.getSet3L(), res.getSet3L()))
             || (eq(pick.getSet3W(), res.getSet3W()) && eq(pick.getSet3L(), res.getSet3L()));
-        boolean s4 = ambosNull(pick.getSet4W(), res.getSet4W())
+        boolean s4 = (ambosNull(pick.getSet4W(), res.getSet4W()) && ambosNull(pick.getSet4L(), res.getSet4L()))
             || (eq(pick.getSet4W(), res.getSet4W()) && eq(pick.getSet4L(), res.getSet4L()));
-        boolean s5 = ambosNull(pick.getSet5W(), res.getSet5W())
+        boolean s5 = (ambosNull(pick.getSet5W(), res.getSet5W()) && ambosNull(pick.getSet5L(), res.getSet5L()))
             || (eq(pick.getSet5W(), res.getSet5W()) && eq(pick.getSet5L(), res.getSet5L()));
 
         return s1 && s2 && s3 && s4 && s5;

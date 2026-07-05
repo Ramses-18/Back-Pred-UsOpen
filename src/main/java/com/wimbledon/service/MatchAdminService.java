@@ -125,6 +125,28 @@ public class MatchAdminService {
     }
 
     /**
+     * Solo cerrar pronóstico (sin cambiar status del partido).
+     * El partido sigue SCHEDULED pero los usuarios no pueden editar.
+     */
+    @Transactional
+    public Match forceDeadlineOnly(Long matchId) {
+        log.info("[forceDeadlineOnly] matchId={}", matchId);
+
+        Match m = matchRepo.findById(matchId)
+            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+
+        if (m.getDeadlineForced()) {
+            throw new IllegalStateException("El pronóstico ya está cerrado.");
+        }
+
+        m.setDeadlineForced(true);
+        matchRepo.save(m);
+
+        log.info("[forceDeadlineOnly] ✓ match {} pronóstico cerrado (sin cambiar status)", matchId);
+        return m;
+    }
+
+    /**
      * NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED).
      * El admin actualiza games en vivo; los usuarios lo ven en la card.
      */

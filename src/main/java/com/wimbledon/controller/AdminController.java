@@ -64,11 +64,24 @@ public class AdminController {
         return ResponseEntity.ok(matchAdminService.forceDeadlineAndStart(matchId));
     }
 
+    /** Solo cerrar pronóstico (sin cambiar status del partido). */
+    @PostMapping("/matches/{matchId}/force-deadline")
+    public ResponseEntity<Match> forceDeadlineOnly(@PathVariable Long matchId) {
+        return ResponseEntity.ok(matchAdminService.forceDeadlineOnly(matchId));
+    }
+
     /** NUEVO — Cargar score parcial durante el partido (sin winner, sin FINISHED). */
     @PatchMapping("/matches/{matchId}/live-score")
     public ResponseEntity<MatchResultDto> updateLiveScore(
             @PathVariable Long matchId,
             @RequestBody MatchResultDto dto) {
         return ResponseEntity.ok(matchAdminService.updateLiveScore(matchId, dto));
+    }
+
+    /** Sincronizar partidos de mañana desde la API de tennis. */
+    @PostMapping("/sync/tomorrow")
+    public ResponseEntity<Map<String, String>> syncTomorrow() {
+        tennisApiService.syncTomorrowEvents();
+        return ResponseEntity.ok(Map.of("status", "Partidos de mañana sincronizados"));
     }
 }

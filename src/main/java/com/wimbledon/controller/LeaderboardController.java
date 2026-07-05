@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ public class LeaderboardController {
      * Ordenado por fecha de partido descendente (más reciente primero).
      */
     @GetMapping("/{userId}/picks")
+    @Transactional
     public ResponseEntity<List<HistoricalPickDto>> getUserPicks(@PathVariable Long userId) {
         log.info("[getUserPicks] userId={}", userId);
 
@@ -46,34 +48,51 @@ public class LeaderboardController {
         log.info("[getUserPicks] encontrados {} picks para {}", picks.size(), user.getEmail());
 
         List<HistoricalPickDto> dtos = picks.stream()
+            .filter(p -> p.getMatch() != null)
             .map(p -> {
                 Match m = p.getMatch();
-                Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
+                try {
+                    Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
 
-                HistoricalPickDto.HistoricalPickDtoBuilder b = HistoricalPickDto.builder()
-                    .matchId(m.getId())
-                    .matchDate(m.getMatchDate())
-                    .player1(m.getPlayer1())
-                    .player2(m.getPlayer2())
-                    .round(m.getRound())
-                    .court(m.getCourt())
-                    .matchStatus(m.getStatus())
-                    .pickWinner(p.getWinner())
-                    .pickSetsWinner(p.getSetsWinner())
-                    .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()));
+                    HistoricalPickDto.HistoricalPickDtoBuilder b = HistoricalPickDto.builder()
+                        .matchId(m.getId())
+                        .matchDate(m.getMatchDate())
+                        .player1(m.getPlayer1())
+                        .player2(m.getPlayer2())
+                        .round(m.getRound())
+                        .court(m.getCourt())
+                        .matchStatus(m.getStatus())
+                        .pickWinner(p.getWinner())
+                        .pickSetsWinner(p.getSetsWinner())
+                        .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()));
 
-                if (optRes.isPresent()) {
-                    MatchResult r = optRes.get();
-                    int pts = scoreService.calcPickPoints(p, r);
-                    b.realWinner(r.getWinner())
-                     .realSetsWinner(r.getSetsWinner())
-                     .realScore(r.getGameResult())
-                     .pointsEarned(pts);
-                } else {
-                    b.pointsEarned(0);
+                    if (optRes.isPresent()) {
+                        MatchResult r = optRes.get();
+                        int pts = scoreService.calcPickPoints(p, r);
+                        b.realWinner(r.getWinner())
+                         .realSetsWinner(r.getSetsWinner())
+                         .realScore(r.getGameResult())
+                         .pointsEarned(pts);
+                    } else {
+                        b.pointsEarned(0);
+                    }
+
+                    return b.build();
+                } catch (Exception e) {
+                    log.error("[getUserPicks] error procesando pick {} (match {}): {}",
+                        p.getId(), m.getId(), e.getMessage(), e);
+                    return HistoricalPickDto.builder()
+                        .matchId(m.getId())
+                        .matchDate(m.getMatchDate())
+                        .player1(m.getPlayer1() != null ? m.getPlayer1() : "?")
+                        .player2(m.getPlayer2() != null ? m.getPlayer2() : "?")
+                        .matchStatus(m.getStatus())
+                        .pickWinner(p.getWinner())
+                        .pickSetsWinner(p.getSetsWinner())
+                        .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
+                        .pointsEarned(0)
+                        .build();
                 }
-
-                return b.build();
             })
             .sorted(Comparator.comparing(HistoricalPickDto::getMatchDate).reversed())
             .collect(Collectors.toList());

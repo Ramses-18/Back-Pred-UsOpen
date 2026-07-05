@@ -171,4 +171,109 @@ public class TennisApiService {
         h.set("X-RapidAPI-Host", apiHost);
         return h;
     }
+
+    /**
+     * Trae partidos programados para mañana desde la API y los inserta en DB
+     * si no existen. Se llama manualmente desde el admin.
+     */
+    public void syncTomorrowEvents() {
+        LocalDate tomorrow = LocalDate.now(ZoneId.of("America/Buenos_Aires")).plusDays(1);
+        String url = baseUrl + "/tennis/v2/extend/api/events/schedule?date="
+            + tomorrow.toString();
+
+        HttpHeaders headers = apiHeaders();
+        log.info("[syncTomorrowEvents] === INICIO === consultando {} para {}", url, tomorrow);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+
+            if (response.getBody() == null) {
+                log.info("[syncTomorrowEvents] respuesta vacía");
+                return;
+            }
+
+            Object resultsObj = response.getBody().get("results");
+            if (!(resultsObj instanceof List)) {
+                log.info("[syncTomorrowEvents] no hay lista 'results'");
+                return;
+            }
+
+            List<Map<String, Object>> events = (List<Map<String, Object>>) resultsObj;
+            List<Match> dbMatches = matchRepo.findByMatchDateOrderByMatchTimeAsc(tomorrow);
+
+            List<Map<String, Object>> wimbledon = events.stream()
+                    .filter(e -> {
+                        String league = String.valueOf(e.get("league"));
+                        String tourType = String.valueOf(e.get("tourType"));
+                        return league.toLowerCase().contains("wimbledon")
+                                && "atp".equalsIgnoreCase(tourType);
+                    })
+                    .collect(Collectors.toList());
+
+            log.info("[syncTomorrowEvents] eventos totales: {}, Wimbledon ATP: {}",
+                    events.size(), wimbledon.size());
+
+            int creados = 0;
+            int yaExistian = 0;
+
+            for (Map<String, Object> event : wimbledon) {
+                String p1Name = String.valueOf(event.get("participant1"));
+                String p2Name = String.valueOf(event.get("participant2"));
+
+                final String p1Final = p1Name;
+                final String p2Final = p2Name;
+
+                boolean existeEnDB = dbMatches.stream()
+                        .anyMatch(m -> coincidePartido(m, p1Final, p2Final));
+
+                if (!existeEnDB) {
+                    LocalTime matchTime = LocalTime.of(12, 0);
+                    Object ts = event.get("startTimestamp");
+                    if (ts != null) {
+                        try {
+                            long epoch = Long.parseLong(ts.toString());
+                            matchTime = Instant.ofEpochSecond(epoch)
+                                    .atZone(ZoneId.of("Europe/London"))
+                                    .toLocalTime();
+                        } catch (Exception ignored) {}
+                    }
+
+                    String court = "Wimbledon - London";
+                    Object venue = event.get("venue");
+                    if (venue != null && !"null".equals(venue.toString())) {
+                        court = venue.toString();
+                    }
+
+                    Integer maxOrder = matchRepo.findMaxOrderInCourt(tomorrow, court);
+                    int orderInCourt = (maxOrder == null ? 0 : maxOrder) + 1;
+
+                    Match nuevo = Match.builder()
+                            .matchDate(tomorrow)
+                            .matchTime(matchTime)
+                            .court(court)
+                            .player1(p1Name)
+                            .player2(p2Name)
+                            .round(parseRound(event.get("round")))
+                            .orderInCourt(orderInCourt)
+                            .followsMatchId(null)
+                            .status("SCHEDULED")
+                            .build();
+                    matchRepo.save(nuevo);
+                    dbMatches.add(nuevo);
+                    creados++;
+                    log.info("[syncTomorrowEvents] ✓ Partido creado: {} vs {} en {} (orden #{})",
+                            p1Name, p2Name, court, orderInCourt);
+                } else {
+                    yaExistian++;
+                }
+            }
+
+            log.info("[syncTomorrowEvents] === FIN === creados: {}, ya existían: {}",
+                    creados, yaExistian);
+
+        } catch (Exception e) {
+            log.error("[syncTomorrowEvents] error: {}", e.getMessage(), e);
+        }
+    }
 }

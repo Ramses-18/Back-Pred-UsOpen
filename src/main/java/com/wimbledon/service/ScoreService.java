@@ -36,12 +36,14 @@ public class ScoreService {
         pts += PTS_WINNER;
 
         int[] realCounts = contarSets(res);
-        Integer realSetsWinner = realCounts[0] > 0 ? Integer.valueOf(realCounts[0]) : res.getSetsWinner();
-        Integer realSetsLoser  = realCounts[1] > 0 ? Integer.valueOf(realCounts[1]) : res.getSetsLoser();
+        boolean hasRealSets = (realCounts[0] + realCounts[1]) > 0;
+        Integer realSetsWinner = hasRealSets ? Integer.valueOf(realCounts[0]) : res.getSetsWinner();
+        Integer realSetsLoser  = hasRealSets ? Integer.valueOf(realCounts[1]) : res.getSetsLoser();
 
         int[] pickCounts = contarSetsPick(pick);
-        Integer pickSetsWinner = pickCounts[0] > 0 ? Integer.valueOf(pickCounts[0]) : pick.getSetsWinner();
-        Integer pickSetsLoser  = pickCounts[1] > 0 ? Integer.valueOf(pickCounts[1]) : pick.getSetsLoser();
+        boolean hasPickSets = (pickCounts[0] + pickCounts[1]) > 0;
+        Integer pickSetsWinner = hasPickSets ? Integer.valueOf(pickCounts[0]) : pick.getSetsWinner();
+        Integer pickSetsLoser  = hasPickSets ? Integer.valueOf(pickCounts[1]) : pick.getSetsLoser();
 
         boolean setsWinnerOk = pickSetsWinner != null && realSetsWinner != null
             && pickSetsWinner.equals(realSetsWinner);

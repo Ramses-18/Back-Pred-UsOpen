@@ -1,3 +1,3 @@
-- Sacame un la seccion torneo de ahi abajo y ponela como un boton disponible para aquellos que no hiceron su pick en la hoja de tabla.
-- Cambia el orden de hoy, cuadro y tabla. ponelos hoy, tabla y cuadro.
-- Quita los emotes de estos, debe quedar el nombre de las hojas. Tambien de donde dice Wimbledon, quita el emote de la raqueta.  
+
+- Crea una nueva hoja con el ranking atp. El admin los va a poder cargar a piacere. Debe haber espacio para 100 jugadores. El admin debe poner el nombre del jugador y los puntos y el sistema los debe posicionar correctamente. Y una vez guardado poder editar los puntos de los jugadores y que el orden se altere o no.
+- Hace los espacios de hoy, tabla, cuadro y ahora ranking mas altos. Del mismo tamano que estaba antes con los emojis.

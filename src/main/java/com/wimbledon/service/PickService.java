@@ -66,6 +66,12 @@ public class PickService {
         Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
         Optional<Pick>        optPick = pickRepo.findByUserIdAndMatchId(user.getId(), m.getId());
 
+        if (optRes.isPresent()) {
+            MatchResult r = optRes.get();
+            log.debug("[toDto] match {} tiene result: id={}, winner={}, s1W={}, s1L={}, s2W={}, s2L={}",
+                m.getId(), r.getId(), r.getWinner(), r.getSet1W(), r.getSet1L(), r.getSet2W(), r.getSet2L());
+        }
+
         MatchResultDto resDto = optRes.map(r -> MatchResultDto.builder()
             .winner(r.getWinner())
             .setsWinner(r.getSetsWinner())

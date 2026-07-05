@@ -5,6 +5,7 @@ import com.wimbledon.entity.Match;
 import com.wimbledon.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@Slf4j
 public class AdminController {
 
     private final MatchAdminService          matchAdminService;
@@ -75,7 +77,15 @@ public class AdminController {
     public ResponseEntity<MatchResultDto> updateLiveScore(
             @PathVariable Long matchId,
             @RequestBody MatchResultDto dto) {
-        return ResponseEntity.ok(matchAdminService.updateLiveScore(matchId, dto));
+        log.info("[PATCH /admin/matches/{}/live-score] request body: {}", matchId, dto);
+        try {
+            MatchResultDto result = matchAdminService.updateLiveScore(matchId, dto);
+            log.info("[PATCH /admin/matches/{}/live-score] ✓ response OK", matchId);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("[PATCH /admin/matches/{}/live-score] ✗ ERROR: {} - {}", matchId, e.getClass().getSimpleName(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     /** Sincronizar partidos de mañana desde la API de tennis. */

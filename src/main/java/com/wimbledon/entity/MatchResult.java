@@ -15,7 +15,7 @@ public class MatchResult {
     @JoinColumn(name = "match_id", nullable = false)
     private Match match;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String winner;
 
     @Column(name = "sets_winner") private Integer setsWinner;

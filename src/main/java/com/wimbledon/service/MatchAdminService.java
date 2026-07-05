@@ -152,41 +152,55 @@ public class MatchAdminService {
      */
     @Transactional
     public MatchResultDto updateLiveScore(Long matchId, MatchResultDto dto) {
-        log.info("[updateLiveScore] matchId={}, set1W={}, set1L={}, set2W={}, set2L={}",
-            matchId, dto.getSet1W(), dto.getSet1L(), dto.getSet2W(), dto.getSet2L());
+        log.info("[updateLiveScore] === INICIO === matchId={}", matchId);
+        log.info("[updateLiveScore] dto recibido: set1W={}, set1L={}, set2W={}, set2L={}, set3W={}, set3L={}, set4W={}, set4L={}, set5W={}, set5L={}, gameResult={}",
+            dto.getSet1W(), dto.getSet1L(), dto.getSet2W(), dto.getSet2L(),
+            dto.getSet3W(), dto.getSet3L(), dto.getSet4W(), dto.getSet4L(),
+            dto.getSet5W(), dto.getSet5L(), dto.getGameResult());
 
         Match match = matchRepo.findById(matchId)
-            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+            .orElseThrow(() -> {
+                log.error("[updateLiveScore] match {} NO ENCONTRADO en DB", matchId);
+                return new IllegalArgumentException("Partido no encontrado.");
+            });
+
+        log.info("[updateLiveScore] match encontrado: id={}, status={}, p1={} vs p2={}, court={}",
+            match.getId(), match.getStatus(), match.getPlayer1(), match.getPlayer2(), match.getCourt());
 
         if (!"IN_PLAY".equals(match.getStatus()) && !"SUSPENDED".equals(match.getStatus())) {
+            log.error("[updateLiveScore] STATUS INVALIDO: {} (se requiere IN_PLAY o SUSPENDED)", match.getStatus());
             throw new IllegalStateException(
                 "Solo se puede cargar score en vivo de un partido IN_PLAY o SUSPENDED. Status: "
                 + match.getStatus());
         }
 
         MatchResult res = resultRepo.findByMatchId(matchId)
-            .orElse(MatchResult.builder().match(match).build());
+            .orElseGet(() -> {
+                log.info("[updateLiveScore] No existe MatchResult para match {}. Creando nuevo...", matchId);
+                return MatchResult.builder().match(match).build();
+            });
+
+        log.info("[updateLiveScore] MatchResult id={}, winner={}, existe={}", res.getId(), res.getWinner(), res.getId() != null);
 
         // Solo actualizamos los sets que vienen en el dto (los null no se tocan)
-        if (dto.getSet1W() != null) res.setSet1W(dto.getSet1W());
-        if (dto.getSet1L() != null) res.setSet1L(dto.getSet1L());
-        if (dto.getSet2W() != null) res.setSet2W(dto.getSet2W());
-        if (dto.getSet2L() != null) res.setSet2L(dto.getSet2L());
-        if (dto.getSet3W() != null) res.setSet3W(dto.getSet3W());
-        if (dto.getSet3L() != null) res.setSet3L(dto.getSet3L());
-        if (dto.getSet4W() != null) res.setSet4W(dto.getSet4W());
-        if (dto.getSet4L() != null) res.setSet4L(dto.getSet4L());
-        if (dto.getSet5W() != null) res.setSet5W(dto.getSet5W());
-        if (dto.getSet5L() != null) res.setSet5L(dto.getSet5L());
+        if (dto.getSet1W() != null) { res.setSet1W(dto.getSet1W()); log.info("[updateLiveScore] set1W -> {}", dto.getSet1W()); }
+        if (dto.getSet1L() != null) { res.setSet1L(dto.getSet1L()); log.info("[updateLiveScore] set1L -> {}", dto.getSet1L()); }
+        if (dto.getSet2W() != null) { res.setSet2W(dto.getSet2W()); log.info("[updateLiveScore] set2W -> {}", dto.getSet2W()); }
+        if (dto.getSet2L() != null) { res.setSet2L(dto.getSet2L()); log.info("[updateLiveScore] set2L -> {}", dto.getSet2L()); }
+        if (dto.getSet3W() != null) { res.setSet3W(dto.getSet3W()); log.info("[updateLiveScore] set3W -> {}", dto.getSet3W()); }
+        if (dto.getSet3L() != null) { res.setSet3L(dto.getSet3L()); log.info("[updateLiveScore] set3L -> {}", dto.getSet3L()); }
+        if (dto.getSet4W() != null) { res.setSet4W(dto.getSet4W()); log.info("[updateLiveScore] set4W -> {}", dto.getSet4W()); }
+        if (dto.getSet4L() != null) { res.setSet4L(dto.getSet4L()); log.info("[updateLiveScore] set4L -> {}", dto.getSet4L()); }
+        if (dto.getSet5W() != null) { res.setSet5W(dto.getSet5W()); log.info("[updateLiveScore] set5W -> {}", dto.getSet5W()); }
+        if (dto.getSet5L() != null) { res.setSet5L(dto.getSet5L()); log.info("[updateLiveScore] set5L -> {}", dto.getSet5L()); }
 
         // No tocamos winner ni setsWinner — eso se carga al finalizar
         if (dto.getGameResult() != null) res.setGameResult(dto.getGameResult());
 
         res.setEnteredAt(LocalDateTime.now());
-        resultRepo.save(res);
-
-        log.info("[updateLiveScore] score parcial guardado en match_result id={}", res.getId());
-        return toDto(res);
+        MatchResult saved = resultRepo.save(res);
+        log.info("[updateLiveScore] ✓ MatchResult guardado OK id={}", saved.getId());
+        return toDto(saved);
     }
 
     private MatchResultDto toDto(MatchResult r) {

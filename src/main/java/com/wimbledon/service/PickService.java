@@ -200,24 +200,8 @@ public class PickService {
     }
 
     private boolean isDeadlinePassed(Match match) {
-        if (!"SCHEDULED".equals(match.getStatus())) {
-            return true;
-        }
-        if (Boolean.TRUE.equals(match.getDeadlineForced())) {
-            return true;
-        }
-        if (match.getMatchTime() != null && match.getMatchDate() != null) {
-            LocalDateTime notBefore = LocalDateTime.of(match.getMatchDate(), match.getMatchTime());
-            return LocalDateTime.now().isAfter(notBefore.minusMinutes(5));
-        }
-        if (match.getFollowsMatchId() != null) {
-            Match parent = matchRepo.findById(match.getFollowsMatchId()).orElse(null);
-            if (parent != null && parent.getActualEndTime() != null) {
-                return LocalDateTime.now().isAfter(parent.getActualEndTime().plusMinutes(5));
-            }
-            return false;
-        }
-        return false;
+        // Solo el admin controla el plazo mediante deadlineForced
+        return Boolean.TRUE.equals(match.getDeadlineForced());
     }
 
     private LocalTime computeEstimatedStart(Match m) {

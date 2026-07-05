@@ -1,10 +1,2 @@
-
-
-
-
-
-- Sigue son dejar actualizar score en vivo. pon logs y te ayudo.
-- Borrale al admin la opcion de pronosticar el resultado del torneo Tambien. desde lo visual. cambiale el nombre de syn partidos de manan a Sincronizar y Añadir.
-- En la parte ahora de cuadro que se vean los resultados exactos.
-
-
+- Sacame todos los partidos de la hoja hoy. Solo deben verse los que tenga fecha de ese mismo dia.
+- Para los cuadros, el admin solo podra el resultado en sets, que se vea asi en la hoja cuadro.

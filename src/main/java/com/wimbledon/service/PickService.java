@@ -30,6 +30,15 @@ public class PickService {
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
+    public List<MatchDto> getTodayAndTomorrowMatches(String email) {
+        User user = findUser(email);
+        LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
+        LocalDate tomorrow = today.plusDays(1);
+        List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
+        matches.addAll(matchRepo.findByMatchDateOrderByMatchTimeAsc(tomorrow));
+        return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
+    }
+
     private MatchDto toDto(Match m, User user) {
         Optional<MatchResult> optRes = resultRepo.findByMatchId(m.getId());
         Optional<Pick>        optPick = pickRepo.findByUserIdAndMatchId(user.getId(), m.getId());

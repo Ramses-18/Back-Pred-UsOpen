@@ -25,9 +25,6 @@ app:
     secret: ${JWT_SECRET}
     expiration-ms: 86400000
   deadline-offset-minutes: 30
-  tennis-api:
-    key: ${TENNIS_API_KEY}
-    host: tennis-api-atp-wta-itf.p.rapidapi.com
 
 logging:
   level:

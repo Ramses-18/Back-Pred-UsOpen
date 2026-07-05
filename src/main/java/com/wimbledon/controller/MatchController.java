@@ -31,6 +31,12 @@ public class MatchController {
         }
     }
 
+    @GetMapping("/upcoming")
+    public ResponseEntity<List<MatchDto>> upcoming(Authentication auth) {
+        log.info("[/upcoming] user={}", auth.getName());
+        return ResponseEntity.ok(pickService.getTodayAndTomorrowMatches(auth.getName()));
+    }
+
     @PostMapping("/{matchId}/pick")
     public ResponseEntity<PickDto> submitPick(
             @PathVariable Long matchId,

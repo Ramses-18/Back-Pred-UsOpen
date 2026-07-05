@@ -89,11 +89,12 @@ public class MatchAdminService {
 
         log.info("[saveResult] MatchResult guardado con id={}", res.getId());
 
-        if (!"FINISHED".equals(match.getStatus())) {
-            match.setStatus("FINISHED");
+        String newStatus = Boolean.TRUE.equals(dto.getRetired()) ? "RETIRED" : "FINISHED";
+        if (!newStatus.equals(match.getStatus())) {
+            match.setStatus(newStatus);
             match.setActualEndTime(LocalDateTime.now());
             matchRepo.save(match);
-            log.info("[saveResult] match {} marcado como FINISHED", matchId);
+            log.info("[saveResult] match {} marcado como {}", matchId, newStatus);
 
             courtQueueService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
 

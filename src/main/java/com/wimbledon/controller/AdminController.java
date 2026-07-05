@@ -16,7 +16,6 @@ public class AdminController {
 
     private final MatchAdminService          matchAdminService;
     private final TournamentPickServiceFacade facade;
-    private final TennisApiService           tennisApiService;
 
     @PostMapping("/matches")
     public ResponseEntity<Match> createMatch(@Valid @RequestBody MatchCreateRequest req) {
@@ -39,13 +38,6 @@ public class AdminController {
     public ResponseEntity<TournamentPickDto> saveTournamentResult(
             @RequestBody TournamentPickRequest req) {
         return ResponseEntity.ok(facade.saveResult(req));
-    }
-
-    /** Sincronización manual (ya no se usa automáticamente cada 2 min). */
-    @PostMapping("/sync/tomorrow")
-    public ResponseEntity<Map<String, String>> syncTomorrow() {
-        tennisApiService.syncTomorrowMatches();
-        return ResponseEntity.ok(Map.of("status", "Partidos de mañana sincronizados"));
     }
 
     /** Cambio manual de status (admin inicia/suspende/finaliza partido). */

@@ -77,19 +77,38 @@ public class PickService {
         if (optPick.isPresent()) {
             Pick p = optPick.get();
             int pts = 0;
+
+            // Calcular sets efectivos del pick
+            int[] pickCounts = scoreService.contarSetsPick(p);
+            Integer effPickSW = p.getSetsWinner();
+            Integer effPickSL = p.getSetsLoser();
+            if (pickCounts[0] + pickCounts[1] > 0) {
+                effPickSW = pickCounts[0];
+                effPickSL = pickCounts[1];
+            }
+
             if (optRes.isPresent()) {
+                MatchResult r = optRes.get();
                 try {
-                    pts = scoreService.calcPickPoints(p, optRes.get());
+                    pts = scoreService.calcPickPoints(p, r);
                 } catch (Exception e) {
                     log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage(), e);
                     pts = 0;
                 }
+
+                // Inyectar sets computados en el resultDto para el desglose del frontend
+                int[] realCounts = scoreService.contarSets(r);
+                if (realCounts[0] + realCounts[1] > 0) {
+                    resDto.setSetsWinner(realCounts[0]);
+                    resDto.setSetsLoser(realCounts[1]);
+                }
             }
+
             pickDto = PickDto.builder()
             .matchId(m.getId())
             .winner(p.getWinner())
-            .setsWinner(p.getSetsWinner())
-            .setsLoser(p.getSetsLoser())
+            .setsWinner(effPickSW)
+            .setsLoser(effPickSL)
             .isCorrection(Boolean.TRUE.equals(p.getIsCorrection()))
             .pointsEarned(pts)
             .set1W(safeInt(p.getSet1W())).set1L(safeInt(p.getSet1L()))

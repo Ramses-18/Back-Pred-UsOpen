@@ -65,7 +65,7 @@ public class ScoreService {
      * Devuelve [setsWinner, setsLoser].
      * Solo cuenta sets que tengan valores > 0 en ambos lados (un set jugado).
      */
-    private int[] contarSets(MatchResult res) {
+    public int[] contarSets(MatchResult res) {
         int w = 0, l = 0;
         Integer[][] sets = {
             {res.getSet1W(), res.getSet1L()},
@@ -84,7 +84,7 @@ public class ScoreService {
     }
 
     /** Igual que contarSets pero para un Pick */
-    private int[] contarSetsPick(Pick pick) {
+    public int[] contarSetsPick(Pick pick) {
         int w = 0, l = 0;
         Integer[][] sets = {
             {pick.getSet1W(), pick.getSet1L()},

@@ -11,7 +11,7 @@ public interface LeagueMemberRepository extends JpaRepository<LeagueMember, Long
 
     Optional<LeagueMember> findByLeagueIdAndUserId(Long leagueId, Long userId);
 
-    @Query("SELECT lm.userId FROM LeagueMember lm WHERE lm.league.id = :leagueId")
+    @Query("SELECT lm.user.id FROM LeagueMember lm WHERE lm.league.id = :leagueId")
     List<Long> findUserIdsByLeagueId(@Param("leagueId") Long leagueId);
 
     List<LeagueMember> findByUserId(Long userId);

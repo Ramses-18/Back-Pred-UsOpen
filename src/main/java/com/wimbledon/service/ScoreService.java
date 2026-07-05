@@ -31,49 +31,49 @@ public class ScoreService {
 
     /** Calcula puntos de un pick individual contra su resultado */
     public int calcPickPoints(Pick pick, MatchResult res) {
-        log.info("[calcPickPoints-DEBUG] pickWinner='{}' resWinner='{}' equalsIgnoreCase={}",
-            pick.getWinner(), res.getWinner(), pick.getWinner().equalsIgnoreCase(res.getWinner()));
+        log.info("[calc-PTS] INICIO pickWinner='{}' resWinner='{}'",
+            pick.getWinner(), res.getWinner());
         int pts = 0;
         if (!pick.getWinner().equalsIgnoreCase(res.getWinner())) {
-            log.info("[calcPickPoints-DEBUG] GANADOR NO COINCIDE → return 0");
+            log.info("[calc-PTS] GANADOR NO COINCIDE → 0");
             return 0;
         }
-
+        log.info("[calc-PTS] ganador OK → pts=1");
         pts += PTS_WINNER;
 
-        // +3 si acertó resultado en sets (setsWinner y setsLoser)
-        // Calcular setsWinner y setsLoser reales contando los sets individuales
-        // (más confiable que lo que el admin haya cargado a mano)
+        log.info("[calc-PTS] llamando contarSets...");
         int[] realCounts = contarSets(res);
+        log.info("[calc-PTS] contarSets OK [{},{}]", realCounts[0], realCounts[1]);
+
         Integer realSetsWinner = realCounts[0] > 0 ? realCounts[0] : res.getSetsWinner();
         Integer realSetsLoser  = realCounts[1] > 0 ? realCounts[1] : res.getSetsLoser();
+        log.info("[calc-PTS] realSetsW={} realSetsL={}", realSetsWinner, realSetsLoser);
 
-        // Si el pick no tiene setsWinner/setsLoser explícitos, contarlos de sus sets individuales
+        log.info("[calc-PTS] llamando contarSetsPick...");
         int[] pickCounts = contarSetsPick(pick);
+        log.info("[calc-PTS] contarSetsPick OK [{},{}]", pickCounts[0], pickCounts[1]);
+
         Integer pickSetsWinner = pickCounts[0] > 0 ? pickCounts[0] : pick.getSetsWinner();
         Integer pickSetsLoser  = pickCounts[1] > 0 ? pickCounts[1] : pick.getSetsLoser();
+        log.info("[calc-PTS] pickSetsW={} pickSetsL={}", pickSetsWinner, pickSetsLoser);
 
         boolean setsWinnerOk = pickSetsWinner != null && realSetsWinner != null
             && pickSetsWinner.equals(realSetsWinner);
-
         boolean setsLoserOk = pickSetsLoser != null && realSetsLoser != null
             && pickSetsLoser.equals(realSetsLoser);
-
-        log.info("[calcPickPoints-DEBUG] realCounts[w={},l={}] pickCounts[w={},l={}] realSetsW={} realSetsL={} pickSetsW={} pickSetsL={} setsWinnerOk={} setsLoserOk={}",
-            realCounts[0], realCounts[1], pickCounts[0], pickCounts[1],
-            realSetsWinner, realSetsLoser, pickSetsWinner, pickSetsLoser,
-            setsWinnerOk, setsLoserOk);
+        log.info("[calc-PTS] setsWinnerOk={} setsLoserOk={}", setsWinnerOk, setsLoserOk);
 
         if (setsWinnerOk && setsLoserOk) {
             pts += PTS_SETS;
         }
 
-        // +10 si acertó el resultado exacto set a set
+        log.info("[calc-PTS] llamando esResultadoExacto...");
         boolean exact = esResultadoExacto(pick, res);
-        log.info("[calcPickPoints-DEBUG] esResultadoExacto={} ptsAntes={} ptsFinal={}", exact, pts, pts + (exact ? PTS_EXACT : 0));
+        log.info("[calc-PTS] exact={} ptsFinal={}", exact, pts + (exact ? PTS_EXACT : 0));
         if (exact)
             pts += PTS_EXACT;
 
+        log.info("[calc-PTS] RETURN {}", pts);
         return pts;
     }
 

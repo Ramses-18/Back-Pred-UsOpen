@@ -92,7 +92,8 @@ public class PickService {
                     pts = scoreService.calcPickPoints(p, r);
                     log.info("[toDto-DEBUG] matchId={} calcPickPoints resultado={}pts", m.getId(), pts);
                 } catch (Exception e) {
-                    log.warn("[toDto] calcPickPoints falló para match {}: {}", m.getId(), e.getMessage(), e);
+                    log.warn("[toDto] calcPickPoints falló para match {} — EXCEPTION CLASS: {} — msg: '{}'", 
+                        m.getId(), e.getClass().getName(), e.getMessage(), e);
                     pts = 0;
                 }
             }

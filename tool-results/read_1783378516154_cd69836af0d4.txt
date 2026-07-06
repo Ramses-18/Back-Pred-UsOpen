@@ -1,0 +1,590 @@
+     1→import React, { useState, useEffect } from 'react'
+     2→import { api, useAuth } from '../context/AuthContext.jsx'
+     3→import { useToast } from '../context/ToastContext.jsx'
+     4→import Confetti from './Confetti.jsx'
+     5→
+     6→const G      = 'var(--green)'
+     7→const GM     = 'var(--green-mid)'
+     8→const BORDER = 'var(--border)'
+     9→
+    10→const emptySet = () => ({ w: '', l: '' })
+    11→
+    12→// ── Modal "Ver pronóstico detallado" ─────────────────────────────────────────
+    13→function PickDetailModal({ match, pick, onClose }) {
+    14→  const res = match.result
+    15→
+    16→  const pickSets = pick ? [1,2,3,4,5].map(i => ({
+    17→    w: pick[`set${i}W`], l: pick[`set${i}L`]
+    18→  })).filter(s => s.w != null && s.w > 0) : []
+    19→
+    20→  const resSets = res ? [1,2,3,4,5].map(i => ({
+    21→    w: res[`set${i}W`], l: res[`set${i}L`]
+    22→  })).filter(s => s.w != null && s.w > 0) : []
+    23→
+    24→  const winnerOk = pick && res && pick.winner?.toLowerCase() === res.winner?.toLowerCase()
+    25→  const setsOk   = winnerOk && pick.setsWinner != null && pick.setsWinner === res.setsWinner
+    26→                    && pick.setsLoser != null && pick.setsLoser === res.setsLoser
+    27→  const exactOk  = pick?.pointsEarned >= 14
+    28→  const pts      = pick?.pointsEarned || 0
+    29→
+    30→  return (
+    31→    <div onClick={onClose} style={{
+    32→      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)',
+    33→      zIndex: 500, display: 'flex', alignItems: 'flex-end',
+    34→    }}>
+    35→      <div onClick={e => e.stopPropagation()} style={{
+    36→        background: 'var(--card-bg)', borderRadius: '20px 20px 0 0',
+    37→        width: '100%', maxWidth: 430, margin: '0 auto',
+    38→        padding: '18px 18px 40px',
+    39→        maxHeight: '88vh', overflowY: 'auto',
+    40→      }}>
+    41→        <div style={{ width: 36, height: 4, background: BORDER, borderRadius: 4, margin: '0 auto 14px' }} />
+    42→
+    43→        <div style={{ fontFamily: 'Georgia,serif', fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+    44→          {match.player1} vs {match.player2}
+    45→        </div>
+    46→        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+    47→          {match.court} · {match.matchTime?.slice(0,5)} hs
+    48→        </div>
+    49→
+    50→        {pts > 0 ? (
+    51→          <>
+    52→            <div style={{ fontSize: 40, fontWeight: 700, color: G, textAlign: 'center', marginBottom: 2 }}>
+    53→              +{pts}
+    54→            </div>
+    55→            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 16 }}>
+    56→              puntos ganados
+    57→            </div>
+    58→          </>
+    59→        ) : (
+    60→          <div style={{
+    61→            background: 'var(--danger-bg)', borderRadius: 8, padding: '10px 14px',
+    62→            fontSize: 13, color: 'var(--danger)', fontWeight: 600, textAlign: 'center', marginBottom: 16,
+    63→          }}>
+    64→            Sin puntos en este partido
+    65→          </div>
+    66→        )}
+    67→
+    68→        {res && (
+    69→          <div style={{ padding: '9px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+    70→            <span style={{ color: 'var(--text-muted)' }}>Resultado real</span>
+    71→            <span style={{ fontWeight: 600 }}>{res.gameResult || `${res.winner} (${res.setsWinner} sets)`}</span>
+    72→          </div>
+    73→        )}
+    74→
+    75→        <div style={{ padding: '9px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+    76→          <span style={{ color: 'var(--text-muted)' }}>Tu ganador</span>
+    77→          <span style={{ fontWeight: 600, color: winnerOk ? G : 'var(--danger)' }}>
+    78→            {winnerOk ? '✓' : '✗'} {pick?.winner}
+    79→          </span>
+    80→        </div>
+    81→
+    82→        {pickSets.length > 0 && (
+    83→          <div style={{ padding: '9px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13 }}>
+    84→            <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginRight: 12 }}>Sets pronosticados</span>
+    85→            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+    86→              {pickSets.map((s, i) => (
+    87→                <span key={i} style={{
+    88→                  background: 'var(--green-light)', borderRadius: 4,
+    89→                  padding: '3px 8px', fontSize: 12, fontWeight: 700, color: G,
+    90→                }}>{s.w}-{s.l}</span>
+    91→              ))}
+    92→            </div>
+    93→          </div>
+    94→        )}
+    95→
+    96→        {resSets.length > 0 && (
+    97→          <div style={{ padding: '9px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13 }}>
+    98→            <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginRight: 12 }}>Sets reales</span>
+    99→            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+   100→              {resSets.map((s, i) => (
+   101→                <span key={i} style={{
+   102→                  background: G, color: 'var(--card-bg)', borderRadius: 4,
+   103→                  padding: '3px 8px', fontSize: 12, fontWeight: 700,
+   104→                }}>{s.w}-{s.l}</span>
+   105→              ))}
+   106→            </div>
+   107→          </div>
+   108→        )}
+   109→
+   110→        <div style={{ padding: '9px 0', fontSize: 13 }}>
+   111→          <div style={{ color: 'var(--text-muted)', marginBottom: 6 }}>Desglose</div>
+   112→          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+   113→            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+   114→              <span>{winnerOk ? '✓' : '✗'} Ganador correcto</span>
+   115→              <span style={{ fontWeight: 600, color: winnerOk ? G : 'var(--text-muted)' }}>{winnerOk ? '+1' : '0'}</span>
+   116→            </div>
+   117→            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+   118→              <span>{setsOk ? '✓' : '✗'} Sets ganados ({pick?.setsWinner ?? '—'} sets)</span>
+   119→              <span style={{ fontWeight: 600, color: setsOk ? G : 'var(--text-muted)' }}>{setsOk ? '+3' : '0'}</span>
+   120→            </div>
+   121→            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+   122→              <span>{exactOk ? '✓' : '✗'} Resultado exacto set a set</span>
+   123→              <span style={{ fontWeight: 600, color: exactOk ? G : 'var(--text-muted)' }}>{exactOk ? '+10' : '0'}</span>
+   124→            </div>
+   125→          </div>
+   126→        </div>
+   127→
+   128→        <button onClick={onClose} style={{
+   129→          width: '100%', padding: 11, background: 'var(--cream)', color: 'var(--text-mid)',
+   130→          border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+   131→          cursor: 'pointer', marginTop: 16,
+   132→        }}>
+   133→          Cerrar
+   134→        </button>
+   135→      </div>
+   136→    </div>
+   137→  )
+   138→}
+   139→
+   140→// ── Match Card principal ──────────────────────────────────────────────────────
+   141→export default function MatchCard({ match, status, onRefresh }) {
+   142→  const { show }              = useToast()
+   143→  const [busy, setBusy]       = useState(false)
+   144→  const [editing, setEditing] = useState(false)
+   145→  const [showModal, setShowModal] = useState(false)
+   146→  const [confettiKey, setConfettiKey] = useState(0)
+   147→  const prevPtsRef = React.useRef(0)
+   148→
+   149→  const { user: authUser } = useAuth()
+   150→  const isAdmin = authUser?.role === 'ADMIN'
+   151→  const pick = match.myPick
+   152→  const res  = match.result
+   153→
+   154→  // Detectar si el usuario acaba de recibir puntos (resultado recién cargado)
+   155→  const currentPts = pick?.pointsEarned || 0
+   156→  useEffect(() => {
+   157→    if (prevPtsRef.current === 0 && currentPts > 0 && status === 'terminado') {
+   158→      setConfettiKey(k => k + 1)
+   159→    }
+   160→    prevPtsRef.current = currentPts
+   161→  }, [currentPts, status])
+   162→
+   163→  // FIX Req 3: El deadline ahora es 100% manual — solo deadlineForced del admin
+   164→  const closed = match.deadlineForced === true
+   165→
+   166→  const [form, setForm] = useState({
+   167→    winner: pick?.winner || '',
+   168→    sets: [emptySet(), emptySet(), emptySet(), emptySet(), emptySet()],
+   169→  })
+   170→
+   171→  const setWinner   = v => setForm(f => ({ ...f, winner: v }))
+   172→  const setSetScore = (idx, side, val) => setForm(f => {
+   173→    const sets = f.sets.map((s, i) => i === idx ? { ...s, [side]: val } : s)
+   174→    return { ...f, sets }
+   175→  })
+   176→
+   177→  const countSetsWinner = () => {
+   178→    let cnt = 0
+   179→    form.sets.forEach(s => {
+   180→      if (s.w !== '' && s.l !== '') {
+   181→        const w = parseInt(s.w), l = parseInt(s.l)
+   182→        if (!isNaN(w) && !isNaN(l) && w > l) cnt++
+   183→      }
+   184→    })
+   185→    return cnt > 0 ? cnt : null
+   186→  }
+   187→
+   188→  const submit = async (useCorrection = false) => {
+   189→    if (!form.winner) { show('Elegí un ganador.', 'error'); return }
+   190→
+   191→    if (closed && !useCorrection) {
+   192→      show('El plazo de pronóstico ya cerró.', 'error')
+   193→      return
+   194→    }
+   195→
+   196→    setBusy(true)
+   197→    try {
+   198→      const payload = {
+   199→        winner: form.winner,
+   200→        setsWinner: countSetsWinner(),
+   201→        gamesWinner: null,
+   202→        gamesLoser: null,
+   203→        useCorrection,
+   204→      }
+   205→      form.sets.forEach((s, i) => {
+   206→        const n = i + 1
+   207→        payload[`set${n}W`] = s.w !== '' ? parseInt(s.w) : null
+   208→        payload[`set${n}L`] = s.l !== '' ? parseInt(s.l) : null
+   209→      })
+   210→      await api.post(`/matches/${match.id}/pick`, payload)
+   211→      show(useCorrection ? 'Corrección guardada ✓' : 'Pronóstico guardado ✓')
+   212→      setEditing(false)
+   213→      onRefresh()
+   214→    } catch (err) {
+   215→      show(err.response?.data?.error || 'Error al guardar.', 'error')
+   216→    } finally { setBusy(false) }
+   217→  }
+   218→
+   219→  const startEdit = () => {
+   220→    if (closed) {
+   221→      show('El plazo ya cerró, usá la corrección del día si no la usaste.', 'error')
+   222→      return
+   223→    }
+   224→    const savedSets = [1,2,3,4,5].map(i => ({
+   225→      w: pick?.[`set${i}W`] != null ? String(pick[`set${i}W`]) : '',
+   226→      l: pick?.[`set${i}L`] != null ? String(pick[`set${i}L`]) : '',
+   227→    }))
+   228→    setForm({ winner: pick?.winner || '', sets: savedSets })
+   229→    setEditing(true)
+   230→  }
+   231→
+   232→  // FIX Req 1: Mostrar formulario si no hay pick y no cerró, o si está editando. Nunca durante IN_PLAY.
+   233→  const showForm = status !== 'jugando' && ((!pick && !closed) || editing)
+   234→
+   235→  // FIX Req 1: Permitir corrección solo si no está en juego, cerró, tiene pick sin corregir, y no terminó
+   236→  const canCorrect = status !== 'jugando' && closed && pick && !pick.isCorrection && status !== 'terminado'
+   237→
+   238→  // Cuadraditos de score
+   239→  const resultSets = (() => {
+   240→    if (!res) return null
+   241→    const arr = []
+   242→    for (let i = 1; i <= 5; i++) {
+   243→      const w = res[`set${i}W`], l = res[`set${i}L`]
+   244→      if (w != null && l != null) arr.push({ w, l })
+   245→    }
+   246→    return arr.length > 0 ? arr : null
+   247→  })()
+   248→
+   249→  const ScoreBoxes = ({ isWinner }) => (
+   250→    <div style={{ display: 'flex', gap: 3 }}>
+   251→      {[0,1,2,3,4].map(i => {
+   252→        if (status === 'jugando' && !resultSets?.[i]) {
+   253→          return (
+   254→            <div key={i} style={{
+   255→              width: 20, height: 20, border: `1px solid var(--gold)`,
+   256→              borderRadius: 3, display: 'flex', alignItems: 'center',
+   257→              justifyContent: 'center', fontSize: 10, fontWeight: 700,
+   258→              background: 'var(--gold-bg)', color: 'var(--gold)',
+   259→            }}>·</div>
+   260→          )
+   261→        }
+   262→        if (!resultSets?.[i]) {
+   263→          return (
+   264→            <div key={i} style={{
+   265→              width: 20, height: 20, border: `1px solid ${BORDER}`,
+   266→              borderRadius: 3, fontSize: 10, color: 'var(--text-muted)', background: 'var(--cream)',
+   267→              display: 'flex', alignItems: 'center', justifyContent: 'center',
+   268→            }}>·</div>
+   269→          )
+   270→        }
+   271→        const score       = isWinner ? resultSets[i].w : resultSets[i].l
+   272→        const ganóEsteSet = isWinner
+   273→          ? resultSets[i].w > resultSets[i].l
+   274→          : resultSets[i].l > resultSets[i].w
+   275→        return (
+   276→          <div key={i} style={{
+   277→            width: 20, height: 20,
+   278→            border: `1px solid ${ganóEsteSet ? G : BORDER}`,
+   279→            borderRadius: 3, display: 'flex', alignItems: 'center',
+   280→            justifyContent: 'center', fontSize: 10, fontWeight: 700,
+   281→            background: ganóEsteSet ? G : 'var(--cream)',
+   282→            color: ganóEsteSet ? 'var(--card-bg)' : 'var(--text-muted)',
+   283→          }}>{score}</div>
+   284→        )
+   285→      })}
+   286→    </div>
+   287→  )
+   288→
+   289→  const winnerOk = pick && res && pick.winner?.toLowerCase() === res.winner?.toLowerCase()
+   290→  const pts      = pick?.pointsEarned || 0
+   291→
+   292→  return (
+   293→    <>
+   294→      <div className="card" style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}>
+   295→
+   296→        {/* Header verde */}
+   297→        <div style={{
+   298→          background: G, padding: '7px 12px',
+   299→          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+   300→        }}>
+   301→          <span style={{ fontSize: 11, color: 'rgba(255,255,255,.8)' }}>
+   302→            {match.matchTime?.slice(0,5)} hs
+   303→          </span>
+   304→          <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
+   305→            {match.court || 'Wimbledon'}
+   306→          </span>
+   307→          {match.round && (
+   308→            <span style={{ fontSize: 10, color: 'rgba(255,255,255,.5)' }}>{match.round  || 'Round'}</span>
+   309→          )}
+   310→        </div>
+   311→
+   312→        {/* Badge LIVE */}
+   313→        {status === 'jugando' && (
+   314→          <div style={{
+   315→            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+   316→            padding: '5px 12px', background: 'var(--danger-bg)', borderBottom: `0.5px solid var(--danger)`,
+   317→          }}>
+   318→            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>En curso</span>
+   319→            <span style={{
+   320→              display: 'inline-flex', alignItems: 'center', gap: 4,
+   321→              color: 'var(--danger)', fontSize: 9, fontWeight: 700,
+   322→              padding: '2px 7px', borderRadius: 20, background: 'var(--danger-bg)',
+   323→            }}>
+   324→              <span style={{
+   325→                width: 5, height: 5, borderRadius: '50%', background: 'var(--danger)',
+   326→                animation: 'pulse .8s infinite',
+   327→              }} />
+   328→              LIVE
+   329→            </span>
+   330→          </div>
+   331→        )}
+   332→
+   333→        {/* Banner cierre — FIX Req 3: solo muestra si el admin forzó el cierre */}
+   334→        {closed && status === 'por_jugar' && (
+   335→          <div style={{
+   336→            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+   337→            padding: '6px 12px',
+   338→            background: 'var(--danger-bg)',
+   339→            borderBottom: '0.5px solid var(--danger)',
+   340→          }}>
+   341→            <div>
+   342→              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Cierre de pronóstico</div>
+   343→              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--danger)' }}>
+   344→                Cerrado
+   345→              </div>
+   346→            </div>
+   347→            <span style={{
+   348→              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+   349→              background: 'var(--danger)', color: 'white',
+   350→            }}>
+   351→              Cerrado
+   352→            </span>
+   353→          </div>
+   354→        )}
+   355→
+   356→        {/* Jugadores */}
+   357→        <div style={{ padding: '11px 12px 10px' }}>
+   358→          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+   359→            <span style={{ fontSize: 14, fontWeight: 600, color: res?.winner === match.player1 ? G : 'var(--text)' }}>
+   360→              {match.player1}{res?.winner === match.player1 ? ' ✓' : ''}
+   361→            </span>
+   362→            <ScoreBoxes isWinner={res?.winner ? res.winner === match.player1 : true} />
+   363→          </div>
+   364→          <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', padding: '1px 0', fontWeight: 700, letterSpacing: '.05em' }}>VS</div>
+   365→          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+   366→            <span style={{ fontSize: 14, fontWeight: 600, color: res?.winner === match.player2 ? G : 'var(--text)' }}>
+   367→              {match.player2}{res?.winner === match.player2 ? ' ✓' : ''}
+   368→            </span>
+   369→            <ScoreBoxes isWinner={res?.winner ? res.winner === match.player2 : false} />
+   370→          </div>
+   371→        </div>
+   372→
+   373→        {/* Pick zone — ocultar para admin */}
+   374→        {!isAdmin && (
+   375→        <div style={{ padding: '10px 12px 12px', borderTop: `1px dashed ${BORDER}`, marginTop: 10 }}>
+   376→          <div style={{ fontSize: 9, fontWeight: 700, color: GM, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
+   377→            Tu pronóstico
+   378→          </div>
+   379→
+   380→          {/* ── TERMINADO ── */}
+   381→          {status === 'terminado' && (
+   382→            pick ? (
+   383→              <>
+   384→                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+   385→                  <div style={{
+   386→                    flex: 1, background: winnerOk ? 'var(--green-pale)' : 'var(--danger-bg)',
+   387→                    border: `1px solid ${winnerOk ? 'var(--green-mid)' : 'var(--danger)'}`,
+   388→                    borderRadius: 6, padding: '7px 10px', fontSize: 12,
+   389→                    color: winnerOk ? G : 'var(--danger)', fontWeight: 600,
+   390→                  }}>
+   391→                    {winnerOk ? '✓' : '✗'} {pick.winner}
+   392→                    {pick.setsWinner ? ` · ${pick.setsWinner} sets` : ''}
+   393→                    {pick.isCorrection && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>(corrección)</span>}
+   394→                  </div>
+   395→                  <span style={{
+   396→                    background: pts > 0 ? G : 'var(--border)',
+   397→                    color: pts > 0 ? 'var(--card-bg)' : 'var(--text-muted)',
+   398→                    fontSize: 11, fontWeight: 700, padding: '4px 10px',
+   399→                    borderRadius: 20, whiteSpace: 'nowrap',
+   400→                  }}>
+   401→                    {pts > 0 ? `+${pts} pts` : '0 pts'}
+   402→                  </span>
+   403→                </div>
+   404→                <button onClick={() => setShowModal(true)} style={{
+   405→                  width: '100%', padding: '8px', background: 'var(--card-bg)',
+   406→                  color: G, border: `1px solid var(--green-mid)`, borderRadius: 7,
+   407→                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+   408→                }}>
+   409→                  Ver pronóstico detallado
+   410→                </button>
+   411→              </>
+   412→            ) : (
+   413→              <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No enviaste pronóstico</p>
+   414→            )
+   415→          )}
+   416→
+   417→          {/* ── EN JUEGO ── */}
+   418→          {status === 'jugando' && (
+   419→            pick ? (
+   420→              <>
+   421→                <div style={{
+   422→                  background: 'var(--green-pale)', border: '1px solid var(--green-mid)',
+   423→                  borderRadius: 6, padding: '7px 10px', fontSize: 12,
+   424→                  color: G, fontWeight: 600, display: 'flex', justifyContent: 'space-between', marginBottom: 6,
+   425→                }}>
+   426→                  🏆 {pick.winner}{pick.setsWinner ? ` · ${pick.setsWinner} sets` : ''}
+   427→                  <span style={{
+   428→                    background: 'var(--gold-bg)', color: 'var(--gold)', border: '1px solid var(--gold)',
+   429→                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+   430→                  }}>En juego</span>
+   431→                </div>
+   432→                {/* FIX Req 1: Botón de corrección visible durante IN_PLAY */}
+   433→                {canCorrect && (
+   434→                  <button onClick={() => {
+   435→                    const savedSets = [1,2,3,4,5].map(i => ({
+   436→                      w: pick?.[`set${i}W`] != null ? String(pick[`set${i}W`]) : '',
+   437→                      l: pick?.[`set${i}L`] != null ? String(pick[`set${i}L`]) : '',
+   438→                    }))
+   439→                    setForm({ winner: pick?.winner || '', sets: savedSets })
+   440→                    setEditing(true)
+   441→                  }} style={{
+   442→                    width: '100%', padding: '8px', background: 'var(--card-bg)',
+   443→                    border: `1px dashed ${GM}`, borderRadius: 7,
+   444→                    color: GM, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+   445→                  }}>
+   446→                    ↺ Usar corrección del día
+   447→                  </button>
+   448→                )}
+   449→              </>
+   450→            ) : (
+   451→              <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No enviaste pronóstico</p>
+   452→            )
+   453→          )}
+   454→
+   455→          {/* ── POR JUGAR ── */}
+   456→          {status === 'por_jugar' && (
+   457→            <>
+   458→              {/* Pick guardado y no editando */}
+   459→              {pick && !showForm && (
+   460→                <>
+   461→                  <div style={{
+   462→                    background: 'var(--green-pale)', border: '1px solid var(--green-mid)',
+   463→                    borderRadius: 6, padding: '7px 10px', fontSize: 12,
+   464→                    color: G, fontWeight: 600, marginBottom: 6,
+   465→                  }}>
+   466→                    🏆 {pick.winner}{pick.setsWinner ? ` · ${pick.setsWinner} sets` : ''}
+   467→                    {pick.isCorrection && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>(corrección)</span>}
+   468→                  </div>
+   469→                  {/* Botón corrección solo si plazo abierto */}
+   470→                  {!closed && (
+   471→                    <button onClick={startEdit} style={{
+   472→                      width: '100%', padding: '8px', background: 'var(--card-bg)',
+   473→                      border: `1px dashed ${GM}`, borderRadius: 7,
+   474→                      color: GM, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+   475→                    }}>
+   476→                      ↺ Usar corrección del día
+   477→                    </button>
+   478→                  )}
+   479→                  {/* Aviso si ya cerró */}
+   480→                  {closed && (
+   481→                    <div style={{
+   482→                      fontSize: 11, color: 'var(--danger)', textAlign: 'center',
+   483→                      padding: '5px 0', fontWeight: 500,
+   484→                    }}>
+   485→                      Plazo cerrado · pronóstico guardado
+   486→                    </div>
+   487→                  )}
+   488→                </>
+   489→              )}
+   490→
+   491→              {/* Sin pick y cerrado */}
+   492→              {!pick && closed && (
+   493→                <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 500 }}>
+   494→                  Plazo cerrado · No enviaste pronóstico
+   495→                </p>
+   496→              )}
+   497→
+   498→              {/* Formulario — solo si está abierto o editando (con corrección) */}
+   499→              {showForm && (
+   500→                <div>
+   501→                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Ganador</div>
+   502→                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+   503→                    {[match.player1, match.player2].map(p => (
+   504→                      <button key={p} onClick={() => setWinner(p)} style={{
+   505→                        flex: 1, padding: '9px 6px',
+   506→                        border: `1px solid ${form.winner === p ? G : BORDER}`,
+   507→                        borderRadius: 7,
+   508→                        background: form.winner === p ? G : 'var(--card-bg)',
+   509→                        color: form.winner === p ? 'white' : 'var(--text)',
+   510→                        fontSize: 13, fontWeight: 600, cursor: 'pointer',
+   511→                      }}>
+   512→                        {p.split(' ').pop()}
+   513→                      </button>
+   514→                    ))}
+   515→                  </div>
+   516→
+   517→                  {form.winner && (
+   518→                    <>
+   519→                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+   520→                        Resultado por set (opcional)
+   521→                        <span style={{ color: 'var(--gold)', fontWeight: 700, marginLeft: 4 }}>+10 pts</span>
+   522→                      </div>
+   523→                      <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   524→                        <div />
+   525→                        {['Set 1','Set 2','Set 3','Set 4','Set 5'].map(s => (
+   526→                          <div key={s} style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 600 }}>{s}</div>
+   527→                        ))}
+   528→                      </div>
+   529→                      {['w','l'].map((side) => (
+   530→                        <div key={side} style={{ display: 'grid', gridTemplateColumns: '56px repeat(5, 1fr)', gap: 4, marginBottom: 4 }}>
+   531→                          <div style={{
+   532→                            fontSize: 11, fontWeight: 600,
+   533→                            color: side === 'w' ? G : 'var(--text-muted)',
+   534→                            display: 'flex', alignItems: 'center', overflow: 'hidden',
+   535→                          }}>
+   536→                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+   537→                              {side === 'w'
+   538→                                ? form.winner.split(' ').pop()
+   539→                                : (form.winner === match.player1 ? match.player2 : match.player1).split(' ').pop()}
+   540→                            </span>
+   541→                          </div>
+   542→                          {form.sets.map((s, i) => (
+   543→                            <input key={i} type="number" min="0" max="7" value={s[side]}
+   544→                              onChange={e => setSetScore(i, side, e.target.value)}
+   545→                              style={{
+   546→                                height: 32, borderRadius: 5, textAlign: 'center',
+   547→                                fontSize: 13, fontWeight: 700, width: '100%', padding: 0, outline: 'none',
+   548→                                border: `0.5px solid ${s[side] !== '' && side === 'w' ? G : BORDER}`,
+   549→                                background: s[side] !== '' && side === 'w' ? 'var(--green-light)' : 'var(--cream)',
+   550→                                color: s[side] !== '' ? (side === 'w' ? G : 'var(--text-mid)') : 'var(--text-muted)',
+   551→                              }}
+   552→                            />
+   553→                          ))}
+   554→                        </div>
+   555→                      ))}
+   556→                    </>
+   557→                  )}
+   558→
+   559→                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+   560→                    <button onClick={() => submit(editing)} disabled={busy} style={{
+   561→                      flex: 1, padding: '12px', background: busy ? 'var(--text-muted)' : G,
+   562→                      color: 'var(--card-bg)', border: 'none', borderRadius: 7,
+   563→                      fontSize: 13, fontWeight: 600,
+   564→                      cursor: busy ? 'not-allowed' : 'pointer',
+   565→                    }}>
+   566→                      {busy ? 'Guardando...' : editing ? 'Guardar corrección' : 'Guardar pronóstico'}
+   567→                    </button>
+   568→                    <button onClick={() => { setEditing(false); setForm({ winner: pick?.winner || '', sets: [emptySet(),emptySet(),emptySet(),emptySet(),emptySet()] }) }} style={{
+   569→                      padding: '12px 14px', background: 'none', color: 'var(--text-muted)',
+   570→                      border: `0.5px solid ${BORDER}`, borderRadius: 7, fontSize: 12, cursor: 'pointer',
+   571→                    }}>
+   572→                      Cancelar
+   573→                    </button>
+   574→                  </div>
+   575→                </div>
+   576→              )}
+   577→            </>
+   578→          )}
+   579→        </div>
+   580→        )}
+   581→      </div>
+   582→
+   583→      {showModal && (
+   584→        <PickDetailModal match={match} pick={pick} onClose={() => setShowModal(false)} />
+   585→      )}
+   586→
+   587→      <Confetti trigger={confettiKey} />
+   588→    </>
+   589→  )
+   590→}

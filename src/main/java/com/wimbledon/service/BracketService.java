@@ -21,13 +21,13 @@ public class BracketService {
 
     // Definición de rondas (key, label, cantidad de partidos)
     private static final String[][] ROUNDS_DEF = {
-        {"R128", "Primera ronda", "128"},
-        {"R64",  "Segunda ronda", "64"},
-        {"R32",  "Tercera ronda", "32"},
-        {"R16",  "Cuarta ronda",  "16"},
+        {"R128", "Primera ronda",    "64"},
+        {"R64",  "Segunda ronda",    "32"},
+        {"R32",  "Tercera ronda",    "16"},
+        {"R16",  "Cuarta ronda",     "8"},
         {"QF",   "Cuartos de final", "4"},
-        {"SF",   "Semifinales",   "2"},
-        {"F",    "Final",         "1"},
+        {"SF",   "Semifinales",      "2"},
+        {"F",    "Final",            "1"},
     };
 
     /** Devuelve todo el bracket armado */
@@ -60,7 +60,7 @@ public class BracketService {
 
     /**
      * Inicializa el bracket completo con partidos vacíos.
-     * Crea 128 + 64 + 32 + 16 + 8 + 4 + 2 + 1 = 255 partidos vacíos.
+     * Crea 64 + 32 + 16 + 8 + 4 + 2 + 1 = 127 partidos vacíos.
      * Solo se ejecuta una vez al inicio del torneo.
      */
     @Transactional

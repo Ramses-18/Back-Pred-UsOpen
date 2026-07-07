@@ -57,53 +57,76 @@ public class MatchAdminService {
 
     @Transactional
     public MatchResultDto saveResult(Long matchId, MatchResultDto dto) {
-        log.info("[saveResult] matchId={}, winner={}, setsWinner={}, gameResult={}",
-            matchId, dto.getWinner(), dto.getSetsWinner(), dto.getGameResult());
+        log.info("[saveResult] === INICIO === matchId={}, winner={}, setsW={}, setsL={}, gameResult={}, retired={}",
+            matchId, dto.getWinner(), dto.getSetsWinner(), dto.getSetsLoser(), dto.getGameResult(), dto.getRetired());
 
-        Match match = matchRepo.findById(matchId)
-            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+        try {
+            Match match = matchRepo.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado. id=" + matchId));
+            log.info("[saveResult] match encontrado: id={}, status={}, player1={}, player2={}",
+                match.getId(), match.getStatus(), match.getPlayer1(), match.getPlayer2());
 
-        MatchResult res = resultRepo.findByMatchId(matchId)
-            .orElse(MatchResult.builder().match(match).build());
+            MatchResult res = resultRepo.findByMatchId(matchId)
+                .orElse(MatchResult.builder().match(match).build());
+            log.info("[saveResult] MatchResult {} (id={})", res.getId() == null ? "NUEVO" : "EXISTENTE", res.getId());
 
-        log.info("[saveResult] MatchResult existente? id={}", res.getId());
+            res.setWinner(dto.getWinner());
+            res.setSetsWinner(dto.getSetsWinner());
+            res.setSetsLoser(dto.getSetsLoser());
+            res.setGameResult(dto.getGameResult());
 
-        res.setWinner(dto.getWinner());
-        res.setSetsWinner(dto.getSetsWinner());
-        res.setSetsLoser(dto.getSetsLoser());
-        res.setGameResult(dto.getGameResult());
+            log.info("[saveResult] seteando sets: s1={}-{} s2={}-{} s3={}-{} s4={}-{} s5={}-{}",
+                dto.getSet1W(), dto.getSet1L(), dto.getSet2W(), dto.getSet2L(),
+                dto.getSet3W(), dto.getSet3L(), dto.getSet4W(), dto.getSet4L(),
+                dto.getSet5W(), dto.getSet5L());
 
-        res.setSet1W(dto.getSet1W());
-        res.setSet1L(dto.getSet1L());
-        res.setSet2W(dto.getSet2W());
-        res.setSet2L(dto.getSet2L());
-        res.setSet3W(dto.getSet3W());
-        res.setSet3L(dto.getSet3L());
-        res.setSet4W(dto.getSet4W());
-        res.setSet4L(dto.getSet4L());
-        res.setSet5W(dto.getSet5W());
-        res.setSet5L(dto.getSet5L());
+            res.setSet1W(dto.getSet1W());
+            res.setSet1L(dto.getSet1L());
+            res.setSet2W(dto.getSet2W());
+            res.setSet2L(dto.getSet2L());
+            res.setSet3W(dto.getSet3W());
+            res.setSet3L(dto.getSet3L());
+            res.setSet4W(dto.getSet4W());
+            res.setSet4L(dto.getSet4L());
+            res.setSet5W(dto.getSet5W());
+            res.setSet5L(dto.getSet5L());
 
-        res.setEnteredAt(LocalDateTime.now());
-        resultRepo.save(res);
+            res.setEnteredAt(LocalDateTime.now());
+            MatchResult saved = resultRepo.save(res);
+            log.info("[saveResult] ✓ MatchResult guardado id={}", saved.getId());
 
-        log.info("[saveResult] MatchResult guardado con id={}", res.getId());
+            String newStatus = Boolean.TRUE.equals(dto.getRetired()) ? "RETIRED" : "FINISHED";
+            log.info("[saveResult] nuevoStatus={} vs statusActual={}", newStatus, match.getStatus());
+            if (!newStatus.equals(match.getStatus())) {
+                match.setStatus(newStatus);
+                match.setActualEndTime(LocalDateTime.now());
+                matchRepo.save(match);
+                log.info("[saveResult] ✓ match {} marcado como {}", matchId, newStatus);
 
-        String newStatus = Boolean.TRUE.equals(dto.getRetired()) ? "RETIRED" : "FINISHED";
-        if (!newStatus.equals(match.getStatus())) {
-            match.setStatus(newStatus);
-            match.setActualEndTime(LocalDateTime.now());
-            matchRepo.save(match);
-            log.info("[saveResult] match {} marcado como {}", matchId, newStatus);
+                try {
+                    courtQueueService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
+                } catch (Exception e) {
+                    log.error("[saveResult] error al recalcular estimados: {}", e.getMessage(), e);
+                }
 
-            courtQueueService.recalcularEstimadosEnCancha(match.getCourt(), match.getMatchDate());
+                try {
+                    String winner = dto.getWinner() != null ? dto.getWinner() : "Resultado cargado";
+                    sendMatchNotification(match, "Resultado: " + winner, match.getPlayer1() + " vs " + match.getPlayer2());
+                } catch (Exception e) {
+                    log.error("[saveResult] error al notificar: {}", e.getMessage(), e);
+                }
+            }
 
-            // Notificar a los usuarios que hicieron pick
-            String winner = dto.getWinner() != null ? dto.getWinner() : "Resultado cargado";
-            sendMatchNotification(match, "Resultado: " + winner, match.getPlayer1() + " vs " + match.getPlayer2());
+            log.info("[saveResult] === OK === matchId={}", matchId);
+            return dto;
+
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            log.error("[saveResult] === ERROR CONTROLADO === matchId={}: {}", matchId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("[saveResult] === ERROR INESPERADO === matchId={}: {}", matchId, e.getMessage(), e);
+            throw e;
         }
-
-        return dto;
     }
 
     /**
@@ -163,39 +186,50 @@ public class MatchAdminService {
      */
     @Transactional
     public MatchResultDto updateLiveScore(Long matchId, MatchResultDto dto) {
-        log.info("[updateLiveScore] matchId={}, set1W={}, set1L={}, set2W={}, set2L={}",
-            matchId, dto.getSet1W(), dto.getSet1L(), dto.getSet2W(), dto.getSet2L());
+        log.info("[updateLiveScore] === INICIO === matchId={}, dto={}", matchId, dto);
 
-        Match match = matchRepo.findById(matchId)
-            .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
+        try {
+            Match match = matchRepo.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado. id=" + matchId));
+            log.info("[updateLiveScore] match encontrado: status={}, player1={} vs player2={}",
+                match.getStatus(), match.getPlayer1(), match.getPlayer2());
 
-        if (!"IN_PLAY".equals(match.getStatus()) && !"SUSPENDED".equals(match.getStatus())) {
-            throw new IllegalStateException(
-                "Solo se puede cargar score en vivo de un partido IN_PLAY o SUSPENDED. Status: "
-                + match.getStatus());
+            if (!"IN_PLAY".equals(match.getStatus()) && !"SUSPENDED".equals(match.getStatus())) {
+                throw new IllegalStateException(
+                    "Solo se puede cargar score en vivo de un partido IN_PLAY o SUSPENDED. Status: "
+                    + match.getStatus());
+            }
+
+            MatchResult res = resultRepo.findByMatchId(matchId)
+                .orElse(MatchResult.builder().match(match).build());
+            log.info("[updateLiveScore] MatchResult {} (id={})", res.getId() == null ? "NUEVO" : "EXISTENTE", res.getId());
+
+            if (dto.getSet1W() != null) res.setSet1W(dto.getSet1W());
+            if (dto.getSet1L() != null) res.setSet1L(dto.getSet1L());
+            if (dto.getSet2W() != null) res.setSet2W(dto.getSet2W());
+            if (dto.getSet2L() != null) res.setSet2L(dto.getSet2L());
+            if (dto.getSet3W() != null) res.setSet3W(dto.getSet3W());
+            if (dto.getSet3L() != null) res.setSet3L(dto.getSet3L());
+            if (dto.getSet4W() != null) res.setSet4W(dto.getSet4W());
+            if (dto.getSet4L() != null) res.setSet4L(dto.getSet4L());
+            if (dto.getSet5W() != null) res.setSet5W(dto.getSet5W());
+            if (dto.getSet5L() != null) res.setSet5L(dto.getSet5L());
+
+            if (dto.getGameResult() != null) res.setGameResult(dto.getGameResult());
+
+            res.setEnteredAt(LocalDateTime.now());
+            MatchResult saved = resultRepo.save(res);
+
+            log.info("[updateLiveScore] === OK === matchResultId={}", saved.getId());
+            return toDto(res);
+
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            log.error("[updateLiveScore] === ERROR CONTROLADO === matchId={}: {}", matchId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("[updateLiveScore] === ERROR INESPERADO === matchId={}: {}", matchId, e.getMessage(), e);
+            throw e;
         }
-
-        MatchResult res = resultRepo.findByMatchId(matchId)
-            .orElse(MatchResult.builder().match(match).build());
-
-        if (dto.getSet1W() != null) res.setSet1W(dto.getSet1W());
-        if (dto.getSet1L() != null) res.setSet1L(dto.getSet1L());
-        if (dto.getSet2W() != null) res.setSet2W(dto.getSet2W());
-        if (dto.getSet2L() != null) res.setSet2L(dto.getSet2L());
-        if (dto.getSet3W() != null) res.setSet3W(dto.getSet3W());
-        if (dto.getSet3L() != null) res.setSet3L(dto.getSet3L());
-        if (dto.getSet4W() != null) res.setSet4W(dto.getSet4W());
-        if (dto.getSet4L() != null) res.setSet4L(dto.getSet4L());
-        if (dto.getSet5W() != null) res.setSet5W(dto.getSet5W());
-        if (dto.getSet5L() != null) res.setSet5L(dto.getSet5L());
-
-        if (dto.getGameResult() != null) res.setGameResult(dto.getGameResult());
-
-        res.setEnteredAt(LocalDateTime.now());
-        resultRepo.save(res);
-
-        log.info("[updateLiveScore] score parcial guardado en match_result id={}", res.getId());
-        return toDto(res);
     }
 
     private MatchResultDto toDto(MatchResult r) {

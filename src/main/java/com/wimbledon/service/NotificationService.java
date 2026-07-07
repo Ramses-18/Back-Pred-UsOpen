@@ -3,7 +3,9 @@ package com.wimbledon.service;
 import com.wimbledon.dto.NotificationSubscriptionRequest;
 import com.wimbledon.entity.NotificationSubscription;
 import com.wimbledon.entity.User;
+import com.wimbledon.entity.Match;
 import com.wimbledon.repository.NotificationSubscriptionRepository;
+import com.wimbledon.repository.PickRepository;
 import com.wimbledon.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class NotificationService {
 
     private final NotificationSubscriptionRepository subRepo;
     private final UserRepository userRepo;
+    private final PickRepository pickRepo;
 
     private static final String VAPID_PUBLIC_KEY = System.getenv("VAPID_PUBLIC_KEY");
     private static final String VAPID_PRIVATE_KEY = System.getenv("VAPID_PRIVATE_KEY");
@@ -52,6 +55,26 @@ public class NotificationService {
     public void unsubscribe(String email, String endpoint) {
         subRepo.deleteByEndpoint(endpoint);
         log.info("[unsubscribe] endpoint removido para usuario {}", email);
+    }
+
+    /**
+     * Notifica resultado/partido a todos los users que hicieron pick.
+     * REQUIRES_NEW = transacción separada, no contamina al llamador.
+     */
+    @Async
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void notifyMatchResult(Match match, String winner) {
+        try {
+            var picks = pickRepo.findByMatchId(match.getId());
+            log.info("[notifyMatchResult] {} picks para match {}", picks.size(), match.getId());
+            String title = "Resultado: " + winner;
+            String body = match.getPlayer1() + " vs " + match.getPlayer2();
+            for (var p : picks) {
+                sendToUser(p.getUser().getId(), title, body);
+            }
+        } catch (Exception e) {
+            log.warn("[notifyMatchResult] no se pudo notificar (tabla puede no existir): {}", e.getMessage());
+        }
     }
 
     public void sendToUser(Long userId, String title, String body) {

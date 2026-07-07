@@ -111,7 +111,7 @@ public class MatchAdminService {
 
                 try {
                     String winner = dto.getWinner() != null ? dto.getWinner() : "Resultado cargado";
-                    sendMatchNotification(match, "Resultado: " + winner, match.getPlayer1() + " vs " + match.getPlayer2());
+                    notificationService.notifyMatchResult(match, winner);
                 } catch (Exception e) {
                     log.error("[saveResult] error al notificar: {}", e.getMessage(), e);
                 }
@@ -176,7 +176,11 @@ public class MatchAdminService {
         log.info("[forceDeadlineAndStart] ✓ match {} cerrado y en juego", matchId);
 
         // Notificar a los usuarios que hicieron pick en este partido
-        sendMatchNotification(m, "Empieza el partido!", m.getPlayer1() + " vs " + m.getPlayer2() + " esta en juego");
+        try {
+            notificationService.notifyMatchResult(m, "Empieza!");
+        } catch (Exception e) {
+            log.error("[forceDeadlineAndStart] error al notificar: {}", e.getMessage());
+        }
 
         return m;
     }

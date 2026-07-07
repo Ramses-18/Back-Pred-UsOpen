@@ -20,6 +20,14 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 
     List<Match> findByMatchDateGreaterThanEqualOrderByMatchDateAscMatchTimeAsc(LocalDate date);
 
+    @Query("""
+        SELECT m FROM Match m
+        WHERE (m.matchDate >= :today)
+           OR (m.status IN ('IN_PLAY','SUSPENDED') AND m.matchDate >= :lookback)
+        ORDER BY m.matchDate ASC, m.matchTime ASC
+    """)
+    List<Match> findUpcomingOrActive(@Param("today") LocalDate today, @Param("lookback") LocalDate lookback);
+
     Match findByFollowsMatchId(Long followsMatchId);
 
     @Query(value = "SELECT COALESCE(MAX(order_in_court), 0) FROM matches WHERE match_date = :date AND court = :court",

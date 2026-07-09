@@ -29,7 +29,7 @@ app:
 logging:
   level:
     org.springframework.security: DEBUG
-    com.wimbledon: DEBUG
+    com.wimbledon: INFO
 
 cors:
-  allowed-origins: ${CORS_ORIGINS:https://front-wimbledon-2dgb.vercel.app}
+  allowed-origins: ${CORS_ORIGINS:https://front-usopen.vercel.app}

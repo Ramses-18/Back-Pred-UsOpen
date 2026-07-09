@@ -19,6 +19,7 @@ public class MatchAdminService {
 
     private final MatchRepository       matchRepo;
     private final MatchResultRepository resultRepo;
+    private final BracketService         bracketService;
     private final CourtQueueService     courtQueueService;
     private final PickRepository        pickRepo;
     private final NotificationService   notificationService;
@@ -41,7 +42,7 @@ public class MatchAdminService {
         log.info("[createMatch] creando partido {} vs {} en cancha {} orden {}",
             req.getPlayer1(), req.getPlayer2(), req.getCourt(), orderInCourt);
 
-        return matchRepo.save(Match.builder()
+        Match saved = matchRepo.save(Match.builder()
             .matchDate(req.getMatchDate())
             .matchTime(req.getMatchTime())
             .court(req.getCourt())
@@ -53,6 +54,15 @@ public class MatchAdminService {
             .status("SCHEDULED")
             .deadlineForced(false)
             .build());
+
+        // Auto-link al bracket si es ronda de cuadro
+        try {
+            bracketService.linkNewMatchToBracket(saved);
+        } catch (Exception e) {
+            log.warn("[createMatch] No se pudo linkar al bracket: {}", e.getMessage());
+        }
+
+        return saved;
     }
 
     @Transactional
@@ -115,6 +125,13 @@ public class MatchAdminService {
                 } catch (Exception e) {
                     log.error("[saveResult] error al notificar: {}", e.getMessage(), e);
                 }
+            }
+
+            // Auto-sync resultado al bracket
+            try {
+                bracketService.syncMatchResultToBracket(match, saved);
+            } catch (Exception e) {
+                log.warn("[saveResult] No se pudo sincronizar al bracket: {}", e.getMessage());
             }
 
             log.info("[saveResult] === OK === matchId={}", matchId);

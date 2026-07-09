@@ -2,6 +2,8 @@ package com.wimbledon.service;
 
 import com.wimbledon.dto.*;
 import com.wimbledon.entity.BracketMatch;
+import com.wimbledon.entity.Match;
+import com.wimbledon.entity.MatchResult;
 import com.wimbledon.repository.BracketMatchRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +21,13 @@ public class BracketService {
 
     private final BracketMatchRepository bracketRepo;
 
-    // Definición de rondas (key, label, cantidad de partidos)
+    // Definición de rondas del US Open (128 jugadores)
+    // key, label, cantidad de partidos
     private static final String[][] ROUNDS_DEF = {
-        {"R16",  "Cuarta ronda",     "8"},
+        {"R128", "1ra ronda",       "64"},
+        {"R64",  "2da ronda",       "32"},
+        {"R32",  "3ra ronda",       "16"},
+        {"R16",  "4ta ronda",        "8"},
         {"QF",   "Cuartos de final", "4"},
         {"SF",   "Semifinales",      "2"},
         {"F",    "Final",            "1"},
@@ -57,7 +63,7 @@ public class BracketService {
 
     /**
      * Inicializa el bracket completo con partidos vacíos.
-     * Crea 8 + 4 + 2 + 1 = 15 partidos vacíos.
+     * US Open: 64 + 32 + 16 + 8 + 4 + 2 + 1 = 127 partidos.
      * Solo se ejecuta una vez al inicio del torneo.
      */
     @Transactional
@@ -66,7 +72,7 @@ public class BracketService {
             throw new IllegalStateException("El bracket ya está inicializado. Eliminar todos los BracketMatch para reiniciar.");
         }
 
-        log.info("[initBracket] Creando estructura del bracket...");
+        log.info("[initBracket] Creando estructura del bracket US Open (127 partidos)...");
 
         // Crear todas las rondas con partidos vacíos
         for (String[] roundDef : ROUNDS_DEF) {
@@ -85,8 +91,7 @@ public class BracketService {
             }
         }
 
-        // Llenar sourceMatch1 y sourceMatch2 para partidos de R64 en adelante
-        // (cada partido de R64 viene de 2 partidos de R128, etc.)
+        // Llenar sourceMatch1 y sourceMatch2: cada partido viene de 2 partidos de la ronda anterior
         for (int r = 1; r < ROUNDS_DEF.length; r++) {
             String currentRound = ROUNDS_DEF[r][0];
             String previousRound = ROUNDS_DEF[r-1][0];
@@ -158,6 +163,98 @@ public class BracketService {
         log.info("[updateMatch] ✓ actualizado: {} vs {} → ganador {}",
             m.getPlayer1(), m.getPlayer2(), m.getWinner());
         return toDto(m);
+    }
+
+    /**
+     * Sincroniza un resultado de partido (matches table) al bracket.
+     * Se llama cuando el admin guarda un resultado final.
+     * Busca el bracket_match de la misma ronda que contenga ambos jugadores y lo actualiza.
+     */
+    @Transactional
+    public void syncMatchResultToBracket(Match match, MatchResult result) {
+        String round = match.getRound();
+        if (round == null || !isBracketRound(round)) {
+            log.info("[syncMatchResult] Partido {} no es de ronda de bracket (round={}), se ignora.", match.getId(), round);
+            return;
+        }
+
+        String p1 = match.getPlayer1();
+        String p2 = match.getPlayer2();
+
+        // Buscar bracket_match de la misma ronda que tenga player1 y player2 coincidentes
+        Optional<BracketMatch> optBm = bracketRepo.findByRound(round).stream()
+            .filter(bm -> {
+                if (bm.getPlayer1() == null || bm.getPlayer2() == null) return false;
+                return (bm.getPlayer1().equalsIgnoreCase(p1) && bm.getPlayer2().equalsIgnoreCase(p2))
+                    || (bm.getPlayer1().equalsIgnoreCase(p2) && bm.getPlayer2().equalsIgnoreCase(p1));
+            })
+            .findFirst();
+
+        if (optBm.isPresent()) {
+            BracketMatch bm = optBm.get();
+            bm.setPlayer1(p1);
+            bm.setPlayer2(p2);
+            bm.setWinner(result.getWinner());
+            bm.setScoreStr(result.getGameResult());
+            bm.setSetsWinner(result.getSetsWinner());
+            bm.setSetsLoser(result.getSetsLoser());
+            bm.setStatus("FINISHED");
+            bm.setUpdatedAt(LocalDateTime.now());
+            bracketRepo.save(bm);
+
+            log.info("[syncMatchResult] ✓ Bracket actualizado: {} vs {} → {} (ronda {})",
+                p1, p2, result.getWinner(), round);
+
+            // Propagar ganador
+            if (result.getWinner() != null) {
+                propagateWinner(bm);
+            }
+        } else {
+            log.info("[syncMatchResult] No se encontró bracket_match para {} vs {} en ronda {}", p1, p2, round);
+        }
+    }
+
+    /**
+     * Cuando se crea un partido de ronda de bracket, lo linka al bracket_match correspondiente
+     * por posición (el primer partido de R128 sin jugadores → le pone los jugadores).
+     */
+    @Transactional
+    public void linkNewMatchToBracket(Match match) {
+        String round = match.getRound();
+        if (round == null || !isBracketRound(round)) {
+            return;
+        }
+
+        String p1 = match.getPlayer1();
+        String p2 = match.getPlayer2();
+
+        // Buscar un bracket_match de esa ronda que todavía no tenga ambos jugadores asignados
+        Optional<BracketMatch> optBm = bracketRepo.findByRound(round).stream()
+            .filter(bm -> bm.getPlayer1() == null || bm.getPlayer2() == null)
+            .filter(bm -> {
+                // Si ya tiene player1, verificar que no sea ninguno de los nuevos
+                if (bm.getPlayer1() != null && (bm.getPlayer1().equalsIgnoreCase(p1) || bm.getPlayer1().equalsIgnoreCase(p2))) return false;
+                if (bm.getPlayer2() != null && (bm.getPlayer2().equalsIgnoreCase(p1) || bm.getPlayer2().equalsIgnoreCase(p2))) return false;
+                return true;
+            })
+            .findFirst();
+
+        if (optBm.isPresent()) {
+            BracketMatch bm = optBm.get();
+            if (bm.getPlayer1() == null) {
+                bm.setPlayer1(p1);
+            } else {
+                bm.setPlayer2(p1);
+            }
+            bracketRepo.save(bm);
+            log.info("[linkNewMatch] ✓ Jugador {} asignado al bracket {} #{}", p1, round, bm.getPositionInRound());
+        } else {
+            log.info("[linkNewMatch] No hay slot vacío en bracket para {} vs {} en ronda {}", p1, p2, round);
+        }
+    }
+
+    private boolean isBracketRound(String round) {
+        return Arrays.stream(ROUNDS_DEF).anyMatch(r -> r[0].equals(round));
     }
 
     /**

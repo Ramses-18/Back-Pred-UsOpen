@@ -12,4 +12,6 @@ public interface BracketMatchRepository extends JpaRepository<BracketMatch, Long
     List<BracketMatch> findAllByOrderByRoundAscPositionInRoundAsc();
 
     Optional<BracketMatch> findByRoundAndPositionInRound(String round, Integer positionInRound);
+
+    List<BracketMatch> findByRound(String round);
 }

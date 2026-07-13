@@ -23,10 +23,9 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generate(String email, String role) {
-        // En 0.12.x se usa simplemente signWith(key) sin especificar el algoritmo explícito
+    public String generate(String username, String role) {
         return Jwts.builder()
-            .subject(email)
+            .subject(username)
             .claim("role", role)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + expirationMs))
@@ -34,7 +33,7 @@ public class JwtUtil {
             .compact();
     }
 
-    public String extractEmail(String token) {
+    public String extractUsername(String token) {
         return Jwts.parser()
             .verifyWith(key())
             .build()

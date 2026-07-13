@@ -19,8 +19,8 @@ public class User {
     @Column(nullable = false, length = 80)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 150)
-    private String email;
+    @Column(nullable = false, unique = true, length = 50)
+    private String username;
 
     @Column(nullable = false)
     private String password;

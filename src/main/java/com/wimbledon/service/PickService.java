@@ -23,15 +23,15 @@ public class PickService {
     private final UserRepository           userRepo;
     private final ScoreService             scoreService;
 
-    public List<MatchDto> getTodayMatches(String email) {
-        User user = findUser(email);
+    public List<MatchDto> getTodayMatches(String username) {
+        User user = findUser(username);
         LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         List<Match> matches = matchRepo.findByMatchDateOrderByMatchTimeAsc(today);
         return matches.stream().map(m -> toDto(m, user)).collect(Collectors.toList());
     }
 
-    public List<MatchDto> getTodayAndTomorrowMatches(String email) {
-        User user = findUser(email);
+    public List<MatchDto> getTodayAndTomorrowMatches(String username) {
+        User user = findUser(username);
         LocalDate today = LocalDate.now(ZoneId.of("America/Buenos_Aires"));
         LocalDate lookback = today.minusDays(5);
         List<Match> matches = matchRepo.findUpcomingOrActive(today, lookback);
@@ -95,8 +95,8 @@ public class PickService {
     }
 
     @Transactional
-    public PickDto submitPick(Long matchId, PickRequest req, String email) {
-        User  user  = findUser(email);
+    public PickDto submitPick(Long matchId, PickRequest req, String username) {
+        User  user  = findUser(username);
         Match match = matchRepo.findById(matchId)
             .orElseThrow(() -> new IllegalArgumentException("Partido no encontrado."));
 
@@ -174,8 +174,8 @@ public class PickService {
         return null;
     }
 
-    private User findUser(String email) {
-        return userRepo.findByEmail(email)
+    private User findUser(String username) {
+        return userRepo.findByUsername(username)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
     }
 

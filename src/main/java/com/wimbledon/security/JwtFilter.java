@@ -20,18 +20,14 @@ public class JwtFilter extends OncePerRequestFilter {
      @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res,FilterChain chain) throws ServletException, IOException {
         String header = req.getHeader("Authorization");
-        System.out.println("Header recibido: " + header);
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             boolean isValid = jwtUtil.validate(token);
-            System.out.println("¿Es el token válido?: " + isValid); 
             if (isValid) {
-                String email = jwtUtil.extractEmail(token);
+                String username = jwtUtil.extractUsername(token);
                 var auth = new UsernamePasswordAuthenticationToken(
-                    email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                    username, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-            } else {
-                System.out.println("Header nulo o sin formato Bearer"); 
             }
         }
         chain.doFilter(req, res);

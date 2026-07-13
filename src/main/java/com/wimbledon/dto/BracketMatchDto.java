@@ -16,5 +16,6 @@ public class BracketMatchDto {
     private Integer setsLoser;
     private Long sourceMatch1;
     private Long sourceMatch2;
+    private Long matchId;
     private String status;
 }

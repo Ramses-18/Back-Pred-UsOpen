@@ -35,8 +35,8 @@ public class NotificationService {
     private static final String VAPID_PRIVATE_KEY = System.getenv("VAPID_PRIVATE_KEY");
 
     @Transactional
-    public void subscribe(String email, NotificationSubscriptionRequest req) {
-        User user = userRepo.findByEmail(email)
+    public void subscribe(String username, NotificationSubscriptionRequest req) {
+        User user = userRepo.findByUsername(username)
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
 
         // Borrar suscripción anterior con el mismo endpoint
@@ -49,13 +49,13 @@ public class NotificationService {
             .authKey(req.getAuthKey())
             .build());
 
-        log.info("[subscribe] usuario {} suscrito a notificaciones", email);
+        log.info("[subscribe] usuario {} suscrito a notificaciones", username);
     }
 
     @Transactional
-    public void unsubscribe(String email, String endpoint) {
+    public void unsubscribe(String username, String endpoint) {
         subRepo.deleteByEndpoint(endpoint);
-        log.info("[unsubscribe] endpoint removido para usuario {}", email);
+        log.info("[unsubscribe] endpoint removido para usuario {}", username);
     }
 
     /**

@@ -48,6 +48,10 @@ public class BracketMatch {
     @Column(name = "sets_loser")
     private Integer setsLoser;
 
+    /** Id del Match real (tabla matches) que corresponde a este slot del bracket */
+    @Column(name = "match_id")
+    private Long matchId;
+
     /** Id del BracketMatch del que sale player1 (en la ronda anterior) */
     @Column(name = "source_match_1")
     private Long sourceMatch1;

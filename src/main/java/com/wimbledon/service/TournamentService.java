@@ -17,8 +17,8 @@ public class TournamentService {
     private final TournamentResultRepository tResultRepo;
     private final UserRepository             userRepo;
 
-    public TournamentPickDto getMyPick(String email) {
-        User user = findUser(email);
+    public TournamentPickDto getMyPick(String username) {
+        User user = findUser(username);
         return tPickRepo.findByUserId(user.getId())
             .map(tp -> TournamentPickDto.builder()
                 .champion(tp.getChampion())
@@ -28,8 +28,8 @@ public class TournamentService {
     }
 
     @Transactional
-    public TournamentPickDto savePick(TournamentPickRequest req, String email) {
-        User user = findUser(email);
+    public TournamentPickDto savePick(TournamentPickRequest req, String username) {
+        User user = findUser(username);
         TournamentPick tp = tPickRepo.findByUserId(user.getId())
             .orElse(TournamentPick.builder().user(user).build());
         tp.setChampion(req.getChampion());
@@ -40,7 +40,7 @@ public class TournamentService {
         tp.setSemi4(s.size() > 3 ? s.get(3) : null);
         tp.setUpdatedAt(LocalDateTime.now());
         tPickRepo.save(tp);
-        return getMyPick(email);
+        return getMyPick(username);
     }
 
     public TournamentPickDto getResult() {
@@ -67,6 +67,6 @@ public class TournamentService {
         return getResult();
     }
 
-    private User findUser(String email) { return userRepo.findByEmail(email).orElseThrow(); }
+    private User findUser(String username) { return userRepo.findByUsername(username).orElseThrow(); }
     private String e(String s) { return s == null ? "" : s; }
 }

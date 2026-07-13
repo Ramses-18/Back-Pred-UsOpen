@@ -216,7 +216,8 @@ public class BracketService {
 
     /**
      * Cuando se crea un partido de ronda de bracket, lo linka al bracket_match correspondiente
-     * por posición (el primer partido de R128 sin jugadores → le pone los jugadores).
+     * por posición (el primer partido de esa ronda sin ambos jugadores asignados).
+     * Asigna player1 y player2 al mismo slot del bracket.
      */
     @Transactional
     public void linkNewMatchToBracket(Match match) {
@@ -232,7 +233,7 @@ public class BracketService {
         Optional<BracketMatch> optBm = bracketRepo.findByRound(round).stream()
             .filter(bm -> bm.getPlayer1() == null || bm.getPlayer2() == null)
             .filter(bm -> {
-                // Si ya tiene player1, verificar que no sea ninguno de los nuevos
+                // Verificar que ningún jugador ya esté en este slot
                 if (bm.getPlayer1() != null && (bm.getPlayer1().equalsIgnoreCase(p1) || bm.getPlayer1().equalsIgnoreCase(p2))) return false;
                 if (bm.getPlayer2() != null && (bm.getPlayer2().equalsIgnoreCase(p1) || bm.getPlayer2().equalsIgnoreCase(p2))) return false;
                 return true;
@@ -243,11 +244,14 @@ public class BracketService {
             BracketMatch bm = optBm.get();
             if (bm.getPlayer1() == null) {
                 bm.setPlayer1(p1);
+                bm.setPlayer2(p2);
             } else {
+                // player1 ya estaba (raro pero posible), poner player2
                 bm.setPlayer2(p1);
             }
+            bm.setMatchId(match.getId());
             bracketRepo.save(bm);
-            log.info("[linkNewMatch] ✓ Jugador {} asignado al bracket {} #{}", p1, round, bm.getPositionInRound());
+            log.info("[linkNewMatch] ✓ {} vs {} asignados al bracket {} #{}", p1, p2, round, bm.getPositionInRound());
         } else {
             log.info("[linkNewMatch] No hay slot vacío en bracket para {} vs {} en ronda {}", p1, p2, round);
         }
@@ -292,6 +296,7 @@ public class BracketService {
             .setsLoser(m.getSetsLoser())
             .sourceMatch1(m.getSourceMatch1())
             .sourceMatch2(m.getSourceMatch2())
+            .matchId(m.getMatchId())
             .status(m.getStatus())
             .build();
     }

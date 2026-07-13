@@ -57,7 +57,7 @@ public class MatchAdminService {
 
         // Auto-link al bracket si es ronda de cuadro
         try {
-            bracketService.linkNewMatchToBracket(saved);
+            bracketService.linkNewMatchToBracket(saved, req.getBracketPosition());
         } catch (Exception e) {
             log.warn("[createMatch] No se pudo linkar al bracket: {}", e.getMessage());
         }

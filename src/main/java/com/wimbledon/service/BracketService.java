@@ -215,12 +215,12 @@ public class BracketService {
     }
 
     /**
-     * Cuando se crea un partido de ronda de bracket, lo linka al bracket_match correspondiente
-     * por posición (el primer partido de esa ronda sin ambos jugadores asignados).
-     * Asigna player1 y player2 al mismo slot del bracket.
+     * Cuando se crea un partido de ronda de bracket, lo linka al bracket_match.
+     * Si bracketPosition != null, usa esa posición específica.
+     * Si no, busca el primer slot vacío de esa ronda.
      */
     @Transactional
-    public void linkNewMatchToBracket(Match match) {
+    public void linkNewMatchToBracket(Match match, Integer bracketPosition) {
         String round = match.getRound();
         if (round == null || !isBracketRound(round)) {
             return;
@@ -229,31 +229,32 @@ public class BracketService {
         String p1 = match.getPlayer1();
         String p2 = match.getPlayer2();
 
-        // Buscar un bracket_match de esa ronda que todavía no tenga ambos jugadores asignados
-        Optional<BracketMatch> optBm = bracketRepo.findByRound(round).stream()
-            .filter(bm -> bm.getPlayer1() == null || bm.getPlayer2() == null)
-            .filter(bm -> {
-                // Verificar que ningún jugador ya esté en este slot
-                if (bm.getPlayer1() != null && (bm.getPlayer1().equalsIgnoreCase(p1) || bm.getPlayer1().equalsIgnoreCase(p2))) return false;
-                if (bm.getPlayer2() != null && (bm.getPlayer2().equalsIgnoreCase(p1) || bm.getPlayer2().equalsIgnoreCase(p2))) return false;
-                return true;
-            })
-            .findFirst();
+        Optional<BracketMatch> optBm;
+
+        if (bracketPosition != null) {
+            // El admin eligió una posición específica
+            optBm = bracketRepo.findByRoundAndPositionInRound(round, bracketPosition);
+        } else {
+            // Auto: primer slot vacío de esa ronda
+            optBm = bracketRepo.findByRound(round).stream()
+                .filter(bm -> bm.getPlayer1() == null || bm.getPlayer2() == null)
+                .filter(bm -> {
+                    if (bm.getPlayer1() != null && (bm.getPlayer1().equalsIgnoreCase(p1) || bm.getPlayer1().equalsIgnoreCase(p2))) return false;
+                    if (bm.getPlayer2() != null && (bm.getPlayer2().equalsIgnoreCase(p1) || bm.getPlayer2().equalsIgnoreCase(p2))) return false;
+                    return true;
+                })
+                .findFirst();
+        }
 
         if (optBm.isPresent()) {
             BracketMatch bm = optBm.get();
-            if (bm.getPlayer1() == null) {
-                bm.setPlayer1(p1);
-                bm.setPlayer2(p2);
-            } else {
-                // player1 ya estaba (raro pero posible), poner player2
-                bm.setPlayer2(p1);
-            }
+            bm.setPlayer1(p1);
+            bm.setPlayer2(p2);
             bm.setMatchId(match.getId());
             bracketRepo.save(bm);
             log.info("[linkNewMatch] ✓ {} vs {} asignados al bracket {} #{}", p1, p2, round, bm.getPositionInRound());
         } else {
-            log.info("[linkNewMatch] No hay slot vacío en bracket para {} vs {} en ronda {}", p1, p2, round);
+            log.info("[linkNewMatch] No hay slot disponible en bracket para {} vs {} en ronda {} pos={}", p1, p2, round, bracketPosition);
         }
     }
 

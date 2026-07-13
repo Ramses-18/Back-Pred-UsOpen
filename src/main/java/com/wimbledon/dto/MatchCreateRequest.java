@@ -14,5 +14,6 @@ public class MatchCreateRequest {
     @NotBlank private String player1;
     @NotBlank private String player2;
     private String round;
+    private Integer bracketPosition;      // posición en la ronda del bracket (1-indexed), null = no vincular al cuadro
     private Long followsMatchId;          // null si es el 1° de la cancha
 }

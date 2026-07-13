@@ -6,7 +6,7 @@ public class LeaderboardEntryDto {
     private int rank;
     private Long userId;          // NUEVO — necesario para el link al historial
     private String name;
-    private String email;
+    private String username;
     private int totalPoints;
     private int dailyPoints;
     private int tournamentPoints;

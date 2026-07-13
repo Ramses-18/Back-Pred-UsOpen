@@ -174,7 +174,7 @@ public class ScoreService {
             return LeaderboardEntryDto.builder()
                 .userId(u.getId())
                 .name(u.getName())
-                .email(u.getEmail())
+                .username(u.getUsername())
                 .totalPoints(daily + tournament)
                 .dailyPoints(daily)
                 .tournamentPoints(tournament)

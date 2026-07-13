@@ -45,7 +45,7 @@ public class LeaderboardController {
             .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
 
         List<Pick> picks = pickRepo.findByUserId(userId);
-        log.info("[getUserPicks] encontrados {} picks para {}", picks.size(), user.getEmail());
+        log.info("[getUserPicks] encontrados {} picks para {}", picks.size(), user.getUsername());
 
         List<HistoricalPickDto> dtos = picks.stream()
             .filter(p -> p.getMatch() != null)

@@ -19,8 +19,8 @@ public class ScoreService {
     private static final int PTS_WINNER       = 1;
     private static final int PTS_SETS         = 3;
     private static final int PTS_EXACT        = 10;
-    private static final int PTS_CHAMPION     = 15;
-    private static final int PTS_SEMIFINALIST = 10;
+    private static final int PTS_CHAMPION     = 7;
+    private static final int PTS_SEMIFINALIST = 5;
 
     private final UserRepository             userRepo;
     private final PickRepository             pickRepo;

@@ -1,6 +1,7 @@
 package com.wimbledon.controller;
 
 import com.wimbledon.dto.TournamentPickDto;
+import com.wimbledon.dto.TournamentPickRequest;
 import com.wimbledon.service.TournamentPickServiceFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,5 +29,14 @@ public class TournamentPublicController {
                     .semis(java.util.List.of("", "", "", "")).build());
         }
         return ResponseEntity.ok(facade.getMyPick(auth.getName()));
+    }
+
+    @PostMapping("/my-pick")
+    public ResponseEntity<TournamentPickDto> saveMyPick(@RequestBody TournamentPickRequest req) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(facade.savePick(req, auth.getName()));
     }
 }
